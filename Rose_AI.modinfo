@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mod id="a1b2c3d4-e5f6-4a01-b0de-f6a7b8c9d0e1" version="1">
+  <Properties>
+    <Name>[COLOR:ResScienceLabelCS]Rose AI Mod[ENDCOLOR]</Name>
+    <Description>AI Behaviour Tweaks - Economy-focused AI improvements for smarter district building and tech priorities.</Description>
+    <Teaser>Smarter AI economy decisions.</Teaser>
+    <SupportsMultiplayer>1</SupportsMultiplayer>
+    <Authors>Rose</Authors>
+    <CompatibleVersions>2.0</CompatibleVersions>
+  </Properties>
+
+  <InGameActions>
+
+    <UpdateDatabase id="ROSE_AI">
+      <Properties>
+        <LoadOrder>600</LoadOrder>
+      </Properties>
+      <File>core/AI_Strategies.sql</File>
+      <File>core/AI_Leaders.sql</File>
+      <File>core/AI_Techs.sql</File>
+      <File>core/AI_Yields.sql</File>
+      <File>core/AI_Districts.sql</File>
+      <File>core/AI_Units.sql</File>
+      <File>core/AI_Beliefs.sql</File>
+      <File>core/AI_Policies.sql</File>
+      <File>core/AI_BehaviorTreeOps.sql</File>
+      <File>core/AI_BehaviorTrees.xml</File>
+    </UpdateDatabase>
+
+    <AddGameplayScripts id="ROSE_AI_SCRIPTS">
+      <File>core/Rose_AI_Gameplay.lua</File>
+    </AddGameplayScripts>
+
+  </InGameActions>
+
+  <Files>
+    <File>core/AI_Strategies.sql</File>
+    <File>core/AI_Leaders.sql</File>
+    <File>core/AI_Techs.sql</File>
+    <File>core/AI_Yields.sql</File>
+    <File>core/AI_Districts.sql</File>
+    <File>core/AI_Units.sql</File>
+    <File>core/AI_Beliefs.sql</File>
+    <File>core/AI_Policies.sql</File>
+    <File>core/AI_BehaviorTreeOps.sql</File>
+    <File>core/AI_BehaviorTrees.xml</File>
+    <File>core/Rose_AI_Gameplay.lua</File>
+  </Files>
+</Mod>

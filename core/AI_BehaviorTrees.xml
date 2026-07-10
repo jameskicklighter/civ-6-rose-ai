@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+Rose AI behavior tree changes, adapted from RomanHoliday AI.
+
+How to read this file:
+- BehaviorTreeNodes is the flat list of behavior steps.
+- NodeId is the local address of one step inside one TreeName.
+- JumpTo marks the end of a control node's child block.
+- TreeData sets parameters for nodes by TreeName + NodeId + DefnId.
+- DefnId depends on the node type. For example, DefnId 0 means
+  AutoProtect Percentage on Operation Defend Units, but it means
+  Pillage Districts on Operation Pillage.
+
+Applied here:
+- New Rose District Pillage operation and tree.
+- Replacement Simple City Defense tree.
+- Replacement Naval Superiority Tree.
+- Small data tuning for Simple Operation Attack, Siege City Assault,
+  and Early City Assault.
+
+Not applied here:
+- RH Air Blitz Tree. The source tree contains an obvious TreeName typo
+  and mixes air assault with nuclear-launch nodes, so it needs save testing.
+- RH City Air Defense Tree. The source tree is not wired to a Rose operation,
+  so defining it would not do anything by itself.
+- RH Nuclear Assault replacement. It changes WMD behavior and the source notes
+  several contract/recruit rows as uncertain, so it is too risky for this pass.
+-->
+
+<GameInfo>
+
+  <!--
+  New operation: Rose District Pillage
+
+  Purpose:
+  Give the AI a small cavalry-only raiding operation that targets enemy
+  passive districts during war. This is safer than replacing city attack trees
+  because it adds a new operation instead of changing the core siege logic.
+
+  Expected in-game effect:
+  AI cavalry should be more willing to form a small team, move toward enemy
+  districts, attack only when convenient, and pillage districts/improvements.
+  -->
+  <AiTeams>
+    <Row TeamName="Rose Pillage Team" />
+  </AiTeams>
+
+  <AiOperationTeams>
+    <Row TeamName="Rose Pillage Team" OperationName="Rose District Pillage" InitialStrengthAdvantage="-1" OngoingStrengthAdvantage="-1" />
+  </AiOperationTeams>
+
+  <OpTeamRequirements>
+    <!-- Keep the team small. Large raid teams stall while waiting for units. -->
+    <Row TeamName="Rose Pillage Team" AiType="UNITTYPE_CAVALRY" MinNumber="2" MaxNumber="3" />
+  </OpTeamRequirements>
+
+  <AiOperationDefs>
+    <!-- Passive districts excludes Encampments. Distances are capped to avoid cross-map suicide raids. -->
+    <Row OperationName="Rose District Pillage" TargetType="TARGET_ENEMY_PASSIVE_DISTRICT" EnemyType="WAR" OperationType="OP_PILLAGE" BehaviorTree="Rose District Pillage Tree" Priority="3" SelfStart="true" MaxTargetDistInRegion="12" MaxTargetDistInArea="12" MaxTargetDistInWorld="12" MinOddsOfSuccess="0.33" MustHaveUnits="2" />
+  </AiOperationDefs>
+
+  <AllowedOperations>
+    <Row ListType="Default_List" OperationDef="Rose District Pillage" />
+  </AllowedOperations>
+
+  <BehaviorTrees>
+    <Row TreeName="Rose District Pillage Tree" />
+  </BehaviorTrees>
+
+  <BehaviorTreeNodes>
+    <!--
+    Rose District Pillage Tree structure:
+
+    Node 1 Sequence runs the whole raid in order.
+      Node 2 Decode Trigger reads the target district/location from the operation.
+      Node 3 Concurrent is the first approach block.
+        Defend nearby vulnerable units, create a recruitment contract, recruit units,
+        optionally attack nearby enemies, pillage if possible, then move toward target.
+      Node 10 Concurrent is the retarget block.
+        If the first target stops being good, change target and continue.
+      Node 17 Concurrent is the final pillage block.
+        Keep defending/recruiting and pillage anything valid nearby.
+    -->
+    <Row NodeType="Sequence" NodeId="1" TreeName="Rose District Pillage Tree" JumpTo="21" />
+      <Row NodeType="Decode Trigger" NodeId="2" TreeName="Rose District Pillage Tree" />
+      <Row NodeType="Concurrent" NodeId="3" TreeName="Rose District Pillage Tree" JumpTo="10" />
+        <Row NodeType="Operation Defend Units" NodeId="4" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Contract Manager Decorator" NodeId="5" TreeName="Rose District Pillage Tree" JumpTo="7" />
+          <Row NodeType="Recruit Units" NodeId="6" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Attack Units" NodeId="7" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Pillage" NodeId="8" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Move" NodeId="9" TreeName="Rose District Pillage Tree" />
+      <Row NodeType="Concurrent" NodeId="10" TreeName="Rose District Pillage Tree" JumpTo="17" />
+        <Row NodeType="Operation Defend Units" NodeId="11" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Change Target" NodeId="12" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Recruit Units" NodeId="13" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Attack Units" NodeId="14" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Pillage" NodeId="15" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Move" NodeId="16" TreeName="Rose District Pillage Tree" />
+      <Row NodeType="Concurrent" NodeId="17" TreeName="Rose District Pillage Tree" JumpTo="21" />
+        <Row NodeType="Operation Defend Units" NodeId="18" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Recruit Units" NodeId="19" TreeName="Rose District Pillage Tree" />
+        <Row NodeType="Operation Pillage" NodeId="20" TreeName="Rose District Pillage Tree" />
+  </BehaviorTreeNodes>
+
+  <TreeData>
+    <!-- Decode Trigger outputs: these provide target units/buildings/improvements/city/location/value slots. -->
+    <Row DefnId="0" NodeId="2" TreeName="Rose District Pillage Tree" Tag="Unused" />
+    <Row DefnId="1" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="2" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="3" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="4" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="5" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="6" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="7" NodeId="2" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="8" NodeId="2" TreeName="Rose District Pillage Tree" Tag="Present Value" />
+
+    <!-- First approach block. -->
+    <Row DefnId="0" NodeId="4" TreeName="Rose District Pillage Tree" DefaultData="40" /> <!-- Operation Defend Units: AutoProtect Percentage. -->
+    <Row DefnId="0" NodeId="5" TreeName="Rose District Pillage Tree" Tag="Recruitment Contract" /> <!-- Contract Manager: shared contract id. -->
+    <Row DefnId="1" NodeId="5" TreeName="Rose District Pillage Tree" />
+    <Row DefnId="2" NodeId="5" TreeName="Rose District Pillage Tree" DefaultData="5" /> <!-- Contract Manager: turn limit. -->
+    <Row DefnId="3" NodeId="5" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Contract Manager: do not block while running. -->
+    <Row DefnId="0" NodeId="6" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Recruit Units: not already in progress. -->
+    <Row DefnId="1" NodeId="6" TreeName="Rose District Pillage Tree" Tag="Recruitment Contract" />
+    <Row DefnId="4" NodeId="6" TreeName="Rose District Pillage Tree" Tag="Present Value" />
+    <Row DefnId="0" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: do not chase nearby targets early. -->
+    <Row DefnId="1" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: do not attack along march early. -->
+    <Row DefnId="2" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: avoid unequal attacks. -->
+    <Row DefnId="0" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage districts. -->
+    <Row DefnId="1" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage improvements too. -->
+    <Row DefnId="0" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="1" /> <!-- Move To enum. -->
+    <Row DefnId="1" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="2" /> <!-- Range to goal. -->
+    <Row DefnId="2" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Validate new units. -->
+    <Row DefnId="3" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="2" /> <!-- Unit spacing. -->
+
+    <!-- Retarget block. -->
+    <Row DefnId="0" NodeId="11" TreeName="Rose District Pillage Tree" DefaultData="35" />
+    <Row DefnId="0" NodeId="12" TreeName="Rose District Pillage Tree" DefaultData="0" /> <!-- Change Target: no backup penalty. -->
+    <Row DefnId="1" NodeId="12" TreeName="Rose District Pillage Tree" DefaultData="-2" /> <!-- Change Target: mild failure penalty. -->
+    <Row DefnId="0" NodeId="13" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="4" NodeId="13" TreeName="Rose District Pillage Tree" Tag="Present Value" />
+    <Row DefnId="0" NodeId="14" TreeName="Rose District Pillage Tree" DefaultData="false" />
+    <Row DefnId="1" NodeId="14" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="2" NodeId="14" TreeName="Rose District Pillage Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="15" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="15" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="0" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="1" />
+    <Row DefnId="1" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="2" />
+    <Row DefnId="2" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="3" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="2" />
+
+    <!-- Final pillage block. -->
+    <Row DefnId="0" NodeId="18" TreeName="Rose District Pillage Tree" DefaultData="35" />
+    <Row DefnId="0" NodeId="19" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="2" NodeId="19" TreeName="Rose District Pillage Tree" DefaultData="4" /> <!-- Recruit Range. -->
+    <Row DefnId="4" NodeId="19" TreeName="Rose District Pillage Tree" Tag="Present Value" />
+    <Row DefnId="0" NodeId="20" TreeName="Rose District Pillage Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="20" TreeName="Rose District Pillage Tree" DefaultData="true" />
+  </TreeData>
+
+  <!--
+  Existing tree tuning: Simple Operation Attack
+
+  RH raises the recruit range on the early recruitment node. This makes the
+  operation less likely to stall because it can pull units from farther away.
+  -->
+  <TreeData>
+    <Update>
+      <Where DefnId="2" NodeId="7" TreeName="Simple Operation Attack" />
+      <Set DefaultData="14" />
+    </Update>
+  </TreeData>
+
+  <!--
+  Replacement: Simple City Defense
+
+  Purpose:
+  The base tree can get stuck around city garrison behavior. This replacement
+  keeps the threatened-city check, then runs defense, recruitment, attack, and
+  movement in a concurrent block.
+
+  Expected in-game effect:
+  Cities should recruit nearby defenders more aggressively, counterattack
+  nearby units, and move defenders into useful positions instead of only trying
+  to garrison.
+
+  Rose correction from RH:
+  RH labeled DefnId 1 on Operation Defend Units as AutoProtect Percentage, but
+  the base game's NodeDataDefinitions say DefnId 0 is AutoProtect Percentage.
+  This copy sets DefnId 0 for the intended value and keeps DefnId 1 near the
+  base protect-outside-range value.
+  -->
+  <BehaviorTreeNodes>
+    <Delete TreeName="Simple City Defense" />
+
+    <Row NodeType="Concurrent" NodeId="0" TreeName="Simple City Defense" JumpTo="11" />
+      <Row NodeType="Is City Threatened" NodeId="1" TreeName="Simple City Defense" />
+      <Row NodeType="Operation Defend Units" NodeId="2" TreeName="Simple City Defense" />
+      <Row NodeType="Concurrent" NodeId="3" TreeName="Simple City Defense" JumpTo="11" />
+        <Row NodeType="Recruit Units" NodeId="4" TreeName="Simple City Defense" />
+        <Row NodeType="Priority" NodeId="5" TreeName="Simple City Defense" JumpTo="8" />
+          <Row NodeType="Can Alpha City" NodeId="6" TreeName="Simple City Defense" />
+          <Row NodeType="Garrison City" NodeId="7" TreeName="Simple City Defense" />
+        <Row NodeType="Operation Attack Units" NodeId="8" TreeName="Simple City Defense" />
+        <Row NodeType="Operation Attack City" NodeId="9" TreeName="Simple City Defense" />
+        <Row NodeType="Operation Move" NodeId="10" TreeName="Simple City Defense" />
+  </BehaviorTreeNodes>
+
+  <TreeData>
+    <Delete TreeName="Simple City Defense" />
+
+    <Row DefnId="0" NodeId="2" TreeName="Simple City Defense" DefaultData="25" /> <!-- Defend Units: AutoProtect Percentage. -->
+    <Row DefnId="1" NodeId="2" TreeName="Simple City Defense" DefaultData="5" /> <!-- Defend Units: Protect Outside Range. -->
+    <Row DefnId="0" NodeId="4" TreeName="Simple City Defense" DefaultData="true" /> <!-- Recruit Units: already in progress. -->
+    <Row DefnId="2" NodeId="4" TreeName="Simple City Defense" DefaultData="15" /> <!-- Recruit Units: recruit range. -->
+    <Row DefnId="6" NodeId="4" TreeName="Simple City Defense" DefaultData="true" /> <!-- Recruit Units: allow stealing units from other teams. -->
+    <Row DefnId="7" NodeId="4" TreeName="Simple City Defense" DefaultData="true" /> <!-- Recruit Units: allow levying. -->
+    <Row DefnId="0" NodeId="8" TreeName="Simple City Defense" DefaultData="true" /> <!-- Attack Units: nearby units. -->
+    <Row DefnId="1" NodeId="8" TreeName="Simple City Defense" DefaultData="true" /> <!-- Attack Units: along march. -->
+    <Row DefnId="2" NodeId="8" TreeName="Simple City Defense" DefaultData="true" /> <!-- Attack Units: allow unequal attacks. -->
+    <Row DefnId="0" NodeId="10" TreeName="Simple City Defense" DefaultData="1" /> <!-- Move To enum. -->
+    <Row DefnId="1" NodeId="10" TreeName="Simple City Defense" DefaultData="1" /> <!-- Range to goal. -->
+    <Row DefnId="2" NodeId="10" TreeName="Simple City Defense" DefaultData="true" /> <!-- Validate new units. -->
+    <Row DefnId="3" NodeId="10" TreeName="Simple City Defense" DefaultData="2" /> <!-- Unit spacing. -->
+    <Row DefnId="5" NodeId="10" TreeName="Simple City Defense" DefaultData="true" /> <!-- Keep moving node running. -->
+  </TreeData>
+
+  <!--
+  Replacement: Naval Superiority Tree
+
+  Purpose:
+  Give the naval operation clearer phases: decode target, assemble a naval
+  force, choose a sea target, move/attack, pillage, then patrol.
+
+  Expected in-game effect:
+  Naval units should spend less time wandering and should more often attack,
+  pillage, or patrol around sea targets.
+
+  Rose corrections from RH:
+  - RH placed Recruit Units Allow Creation on NodeId 4, but NodeId 4 is the
+    Contract Manager Decorator. This copy puts it on NodeId 5.
+  - RH placed the Naval Pillage data on NodeId 18, but NodeId 18 is Naval Patrol.
+    This copy puts it on NodeId 17, the actual Naval Pillage node.
+  -->
+  <BehaviorTreeNodes>
+    <Delete TreeName="Naval Superiority Tree" />
+
+    <Row NodeType="Sequence" NodeId="0" TreeName="Naval Superiority Tree" JumpTo="19" />
+      <Row NodeType="Decode Trigger" NodeId="1" TreeName="Naval Superiority Tree" />
+      <Row NodeType="Concurrent" NodeId="2" TreeName="Naval Superiority Tree" JumpTo="7" />
+        <Row NodeType="Operation Defend Units" NodeId="3" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Contract Manager Decorator" NodeId="4" TreeName="Naval Superiority Tree" JumpTo="6" />
+          <Row NodeType="Recruit Units" NodeId="5" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Operation Attack Units" NodeId="6" TreeName="Naval Superiority Tree" />
+      <Row NodeType="Concurrent" NodeId="7" TreeName="Naval Superiority Tree" JumpTo="19" />
+        <Row NodeType="Recruit Units" NodeId="8" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Operation Defend Units" NodeId="9" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Priority" NodeId="10" TreeName="Naval Superiority Tree" JumpTo="12" />
+          <Row NodeType="Can Alpha City" NodeId="11" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Naval Choose Target" NodeId="12" TreeName="Naval Superiority Tree" JumpTo="16" />
+          <Row NodeType="Concurrent" NodeId="13" TreeName="Naval Superiority Tree" JumpTo="16" />
+            <Row NodeType="Operation Move" NodeId="14" TreeName="Naval Superiority Tree" />
+            <Row NodeType="Operation Attack Units" NodeId="15" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Operation Attack City" NodeId="16" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Naval Pillage" NodeId="17" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Naval Patrol" NodeId="18" TreeName="Naval Superiority Tree" />
+  </BehaviorTreeNodes>
+
+  <TreeData>
+    <Delete TreeName="Naval Superiority Tree" />
+
+    <Row DefnId="0" NodeId="1" TreeName="Naval Superiority Tree" Tag="Unused" />
+    <Row DefnId="1" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="2" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="3" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="4" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="5" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="6" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="7" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="8" NodeId="1" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="0" NodeId="3" TreeName="Naval Superiority Tree" DefaultData="50" /> <!-- Defend Units: AutoProtect Percentage. -->
+    <Row DefnId="0" NodeId="4" TreeName="Naval Superiority Tree" Tag="Naval Force Contract" />
+    <Row DefnId="1" NodeId="4" TreeName="Naval Superiority Tree" />
+    <Row DefnId="2" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="10" />
+    <Row DefnId="3" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="1" NodeId="5" TreeName="Naval Superiority Tree" Tag="Naval Force Contract" />
+    <Row DefnId="3" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="true" /> <!-- Recruit Units: allow creation. -->
+    <Row DefnId="4" NodeId="5" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="0" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="4" NodeId="8" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="0" NodeId="9" TreeName="Naval Superiority Tree" DefaultData="35" />
+    <Row DefnId="0" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="DOMAIN_SEA" />
+    <Row DefnId="1" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Do not fail if no target exists. -->
+    <Row DefnId="0" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="1" />
+    <Row DefnId="1" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="3" />
+    <Row DefnId="2" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="3" />
+    <Row DefnId="0" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="17" TreeName="Naval Superiority Tree" DefaultData="No Value" />
+  </TreeData>
+
+  <!--
+  Existing tree data tuning: Siege and Early City Assault
+
+  These do not replace the full trees. They only adjust existing node data:
+  - Recruit and contract turn limits on Siege City Assault.
+  - Allow stealing units for several Siege City Assault recruit nodes.
+  - Extend one Early City Assault turn limiter.
+  -->
+  <TreeData>
+    <Update>
+      <Where DefnId="5" NodeId="11" TreeName="Siege City Assault" />
+      <Set DefaultData="9" />
+    </Update>
+    <Update>
+      <Where DefnId="2" NodeId="10" TreeName="Siege City Assault" />
+      <Set DefaultData="9" />
+    </Update>
+    <Update>
+      <Where DefnId="0" NodeId="32" TreeName="Siege City Assault" />
+      <Set DefaultData="9" />
+    </Update>
+    <Update>
+      <Where DefnId="0" NodeId="17" TreeName="Siege City Assault" />
+      <Set DefaultData="11" />
+    </Update>
+
+    <Row DefnId="6" NodeId="11" TreeName="Siege City Assault" DefaultData="true" />
+    <Row DefnId="6" NodeId="22" TreeName="Siege City Assault" DefaultData="true" />
+    <Row DefnId="6" NodeId="36" TreeName="Siege City Assault" DefaultData="true" />
+    <Row DefnId="6" NodeId="44" TreeName="Siege City Assault" DefaultData="true" />
+
+    <Update>
+      <Where DefnId="0" NodeId="16" TreeName="Early City Assault" />
+      <Set DefaultData="13" />
+    </Update>
+  </TreeData>
+
+</GameInfo>

@@ -16,6 +16,10 @@ Applied here:
 - New Rose District Pillage operation and tree.
 - Replacement Simple City Defense tree.
 - Replacement Naval Superiority Tree.
+- Naval Superiority team exclusions for non-naval unit categories.
+- Lower city-assault strength ratios so assembled armies can proceed.
+- Actual siege-unit requirement for walled-city attacks.
+- Settlement escort limits that reserve siege units for military operations.
 - Small data tuning for Simple Operation Attack, Siege City Assault,
   and Early City Assault.
 
@@ -29,6 +33,18 @@ Not applied here:
 -->
 
 <GameInfo>
+
+  <!--
+  Base-game attack tree names are target-based, not era-based:
+  - Simple Operation Attack attacks barbarian camps; it is not a city tree.
+  - Early City Assault attacks cities without walls in any era.
+  - Siege City Assault attacks walled cities in any era and adds formation,
+    siege positioning, siege-support, and air-assault behavior.
+
+  Attack Enemy City / Attack Walled City can assemble before war and use the
+  trees' diplomacy phases. Their Wartime variants require an existing war and
+  use lower force/odds gates so the AI can react to an ongoing conflict.
+  -->
 
   <!--
   New operation: Rose District Pillage
@@ -48,16 +64,87 @@ Not applied here:
 
   <AiOperationTeams>
     <Row TeamName="Rose Pillage Team" OperationName="Rose District Pillage" InitialStrengthAdvantage="-1" OngoingStrengthAdvantage="-1" />
+
+    <!--
+    Base city-assault ratios require much larger strength advantages than the
+    operations can usually recruit. Lower ratios let assembled forces proceed
+    without reducing the operation's target, odds, or minimum-unit safeguards.
+    -->
+    <Update>
+      <Where TeamName="Simple City Attack Force" OperationName="Attack Enemy City" />
+      <Set InitialStrengthAdvantage="0.8" OngoingStrengthAdvantage="1.6" />
+    </Update>
+    <Update>
+      <Where TeamName="Simple City Attack Force" OperationName="Wartime Attack Enemy City" />
+      <Set InitialStrengthAdvantage="0.4" OngoingStrengthAdvantage="0.8" />
+    </Update>
+    <Update>
+      <Where TeamName="City Attack Force" OperationName="Attack Walled City" />
+      <!-- Preserve more caution than 1.5 without restoring the base game's stall-prone value of 4.0. -->
+      <Set InitialStrengthAdvantage="1.0" OngoingStrengthAdvantage="1.75" />
+    </Update>
+    <Update>
+      <Where TeamName="City Attack Force" OperationName="Wartime Attack Walled City" />
+      <Set InitialStrengthAdvantage="0.6" OngoingStrengthAdvantage="1.0" />
+    </Update>
   </AiOperationTeams>
 
   <OpTeamRequirements>
     <!-- Keep the team small. Large raid teams stall while waiting for units. -->
-    <Row TeamName="Rose Pillage Team" AiType="UNITTYPE_CAVALRY" MinNumber="2" MaxNumber="3" />
+    <Row TeamName="Rose Pillage Team" AiType="UNITTYPE_CAVALRY" MinNumber="1" MaxNumber="2" />
+
+    <!--
+    Walled-city attacks require one actual bombard-capable siege unit.
+    UNITTYPE_SIEGE_ALL is broader and also includes rams, towers, anti-air,
+    Mobile SAMs, and the Giant Death Robot, so it is no longer the minimum.
+    The two tags overlap: one Catapult satisfies both classifications, but the
+    UNITTYPE_SIEGE row is what guarantees an actual bombard unit.
+    -->
+    <Update>
+      <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE" />
+      <Set MinNumber="1" MaxNumber="3" />
+    </Update>
+    <Update>
+      <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE_ALL" />
+      <Set MinNumber="0" />
+    </Update>
+
+    <!--
+    Settlement operations need one escort but should not absorb an unlimited
+    number of combat units or divert bombard/support units from city attacks.
+    Two simultaneous settlement operations can each recruit at most two
+    ordinary combat escorts; siege-tagged units are excluded from the team.
+    -->
+    <Update>
+      <Where TeamName="Settle City Team" AiType="UNITAI_COMBAT" />
+      <Set MinNumber="1" MaxNumber="2" />
+    </Update>
+    <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE_ALL" MinNumber="0" MaxNumber="0" />
+
+    <!-- UNITTYPE_NAVAL alone does not stop generic melee/ranged roles from selecting land or air units. -->
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_LAND_COMBAT" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_NUCLEAR" MinNumber="0" MaxNumber="0" />
   </OpTeamRequirements>
 
   <AiOperationDefs>
     <!-- Passive districts excludes Encampments. Distances are capped to avoid cross-map suicide raids. -->
-    <Row OperationName="Rose District Pillage" TargetType="TARGET_ENEMY_PASSIVE_DISTRICT" EnemyType="WAR" OperationType="OP_PILLAGE" BehaviorTree="Rose District Pillage Tree" Priority="3" SelfStart="true" MaxTargetDistInRegion="12" MaxTargetDistInArea="12" MaxTargetDistInWorld="12" MinOddsOfSuccess="0.33" MustHaveUnits="2" />
+    <Row OperationName="Rose District Pillage" TargetType="TARGET_ENEMY_PASSIVE_DISTRICT" EnemyType="WAR" OperationType="OP_PILLAGE" BehaviorTree="Rose District Pillage Tree" Priority="2" SelfStart="true" MaxTargetDistInRegion="10" MaxTargetDistInArea="10" MaxTargetDistInWorld="10" MinOddsOfSuccess="0.33" MustHaveUnits="1" />
+
+    <!--
+    Keep walled-city assaults local so one AI does not split its army and
+    production contracts among several distant sieges at the same time.
+    -->
+    <Update>
+      <Where OperationName="Attack Walled City" />
+      <Set MaxTargetDistInRegion="8" MaxTargetDistInArea="8" MaxTargetDistInWorld="10" />
+    </Update>
+    <Update>
+      <Where OperationName="Wartime Attack Walled City" />
+      <Set MaxTargetDistInRegion="8" MaxTargetDistInArea="8" MaxTargetDistInWorld="10" />
+    </Update>
   </AiOperationDefs>
 
   <AllowedOperations>
@@ -76,28 +163,25 @@ Not applied here:
       Node 2 Decode Trigger reads the target district/location from the operation.
       Node 3 Concurrent is the first approach block.
         Defend nearby vulnerable units, create a recruitment contract, recruit units,
-        optionally attack nearby enemies, pillage if possible, then move toward target.
-      Node 10 Concurrent is the retarget block.
-        If the first target stops being good, change target and continue.
+        optionally attack nearby enemies, pillage valid adjacent targets, and move
+        toward the target. Pillaging stays active during the approach because the
+        movement node does not reliably report success at the target.
       Node 17 Concurrent is the final pillage block.
-        Keep defending/recruiting and pillage anything valid nearby.
+        Keep defending/recruiting and pillage anything valid nearby. The operation
+        uses one or two cavalry units so it can begin without a large muster.
+
+    The original retarget block was removed because Operation Change Target failed
+    whenever no replacement target existed, preventing the final pillage block.
     -->
     <Row NodeType="Sequence" NodeId="1" TreeName="Rose District Pillage Tree" JumpTo="21" />
       <Row NodeType="Decode Trigger" NodeId="2" TreeName="Rose District Pillage Tree" />
-      <Row NodeType="Concurrent" NodeId="3" TreeName="Rose District Pillage Tree" JumpTo="10" />
+      <Row NodeType="Concurrent" NodeId="3" TreeName="Rose District Pillage Tree" JumpTo="17" />
         <Row NodeType="Operation Defend Units" NodeId="4" TreeName="Rose District Pillage Tree" />
         <Row NodeType="Contract Manager Decorator" NodeId="5" TreeName="Rose District Pillage Tree" JumpTo="7" />
           <Row NodeType="Recruit Units" NodeId="6" TreeName="Rose District Pillage Tree" />
         <Row NodeType="Operation Attack Units" NodeId="7" TreeName="Rose District Pillage Tree" />
         <Row NodeType="Operation Pillage" NodeId="8" TreeName="Rose District Pillage Tree" />
         <Row NodeType="Operation Move" NodeId="9" TreeName="Rose District Pillage Tree" />
-      <Row NodeType="Concurrent" NodeId="10" TreeName="Rose District Pillage Tree" JumpTo="17" />
-        <Row NodeType="Operation Defend Units" NodeId="11" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Change Target" NodeId="12" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Recruit Units" NodeId="13" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Attack Units" NodeId="14" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Pillage" NodeId="15" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Move" NodeId="16" TreeName="Rose District Pillage Tree" />
       <Row NodeType="Concurrent" NodeId="17" TreeName="Rose District Pillage Tree" JumpTo="21" />
         <Row NodeType="Operation Defend Units" NodeId="18" TreeName="Rose District Pillage Tree" />
         <Row NodeType="Recruit Units" NodeId="19" TreeName="Rose District Pillage Tree" />
@@ -128,28 +212,12 @@ Not applied here:
     <Row DefnId="0" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: do not chase nearby targets early. -->
     <Row DefnId="1" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: do not attack along march early. -->
     <Row DefnId="2" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: avoid unequal attacks. -->
-    <Row DefnId="0" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage districts. -->
-    <Row DefnId="1" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage improvements too. -->
+    <Row DefnId="0" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage districts during the approach. -->
+    <Row DefnId="1" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage improvements during the approach. -->
     <Row DefnId="0" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="1" /> <!-- Move To enum. -->
     <Row DefnId="1" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="2" /> <!-- Range to goal. -->
     <Row DefnId="2" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Validate new units. -->
     <Row DefnId="3" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="2" /> <!-- Unit spacing. -->
-
-    <!-- Retarget block. -->
-    <Row DefnId="0" NodeId="11" TreeName="Rose District Pillage Tree" DefaultData="35" />
-    <Row DefnId="0" NodeId="12" TreeName="Rose District Pillage Tree" DefaultData="0" /> <!-- Change Target: no backup penalty. -->
-    <Row DefnId="1" NodeId="12" TreeName="Rose District Pillage Tree" DefaultData="-2" /> <!-- Change Target: mild failure penalty. -->
-    <Row DefnId="0" NodeId="13" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="4" NodeId="13" TreeName="Rose District Pillage Tree" Tag="Present Value" />
-    <Row DefnId="0" NodeId="14" TreeName="Rose District Pillage Tree" DefaultData="false" />
-    <Row DefnId="1" NodeId="14" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="2" NodeId="14" TreeName="Rose District Pillage Tree" DefaultData="false" />
-    <Row DefnId="0" NodeId="15" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="1" NodeId="15" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="0" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="1" />
-    <Row DefnId="1" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="2" />
-    <Row DefnId="2" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="3" NodeId="16" TreeName="Rose District Pillage Tree" DefaultData="2" />
 
     <!-- Final pillage block. -->
     <Row DefnId="0" NodeId="18" TreeName="Rose District Pillage Tree" DefaultData="35" />
@@ -167,10 +235,7 @@ Not applied here:
   operation less likely to stall because it can pull units from farther away.
   -->
   <TreeData>
-    <Update>
-      <Where DefnId="2" NodeId="7" TreeName="Simple Operation Attack" />
-      <Set DefaultData="14" />
-    </Update>
+    <Row DefnId="2" NodeId="8" TreeName="Simple Operation Attack" DefaultData="14" />
   </TreeData>
 
   <!--
@@ -243,6 +308,9 @@ Not applied here:
     Contract Manager Decorator. This copy puts it on NodeId 5.
   - RH placed the Naval Pillage data on NodeId 18, but NodeId 18 is Naval Patrol.
     This copy puts it on NodeId 17, the actual Naval Pillage node.
+  - RH added a Priority -> Can Alpha City gate before target selection. Naval
+    operations frequently have no alpha city, so that gate stopped the entire
+    sequence. Target selection now follows recruitment and defense directly.
   -->
   <BehaviorTreeNodes>
     <Delete TreeName="Naval Superiority Tree" />
@@ -257,8 +325,6 @@ Not applied here:
       <Row NodeType="Concurrent" NodeId="7" TreeName="Naval Superiority Tree" JumpTo="19" />
         <Row NodeType="Recruit Units" NodeId="8" TreeName="Naval Superiority Tree" />
         <Row NodeType="Operation Defend Units" NodeId="9" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Priority" NodeId="10" TreeName="Naval Superiority Tree" JumpTo="12" />
-          <Row NodeType="Can Alpha City" NodeId="11" TreeName="Naval Superiority Tree" />
         <Row NodeType="Naval Choose Target" NodeId="12" TreeName="Naval Superiority Tree" JumpTo="16" />
           <Row NodeType="Concurrent" NodeId="13" TreeName="Naval Superiority Tree" JumpTo="16" />
             <Row NodeType="Operation Move" NodeId="14" TreeName="Naval Superiority Tree" />
@@ -314,6 +380,7 @@ Not applied here:
 
   These do not replace the full trees. They only adjust existing node data:
   - Recruit and contract turn limits on Siege City Assault.
+  - Give the Node 26 contract/diplomacy branch two turns instead of one.
   - Allow stealing units for several Siege City Assault recruit nodes.
   - Extend one Early City Assault turn limiter.
   -->
@@ -333,6 +400,10 @@ Not applied here:
     <Update>
       <Where DefnId="0" NodeId="17" TreeName="Siege City Assault" />
       <Set DefaultData="11" />
+    </Update>
+    <Update>
+      <Where DefnId="0" NodeId="26" TreeName="Siege City Assault" />
+      <Set DefaultData="2" />
     </Update>
 
     <Row DefnId="6" NodeId="11" TreeName="Siege City Assault" DefaultData="true" />

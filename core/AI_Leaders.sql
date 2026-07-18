@@ -273,6 +273,77 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseNavalBiasDistricts', 'DISTRICT_HARBOR', 1, 50);
 
 -- ============================================================================
+-- 6b. HARALD COASTAL RAID SUPPORT
+-- Original Harald alone has TRAIT_LEADER_MELEE_COASTAL_RAIDS. The alternate
+-- Harald is intentionally excluded because he does not receive the coastal
+-- raid ability. Base, RH, Real Strategy, and AI+ all rely on the engine's
+-- native Coastal Raid tactical move; no behavior-tree node can issue the
+-- actual unit operation, so Rose reinforces that native path instead.
+-- ============================================================================
+
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseHaraldRaidTactics'),
+('RoseHaraldRaidUnitBuilds');
+
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseHaraldRaidTactics',    'TRAIT_LEADER_MELEE_COASTAL_RAIDS', 'Tactics'),
+('RoseHaraldRaidUnitBuilds', 'TRAIT_LEADER_MELEE_COASTAL_RAIDS', 'UnitPromotionClasses');
+
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseHaraldRaidTactics',    'Coastal Raid',                  1, 2),
+('RoseHaraldRaidUnitBuilds', 'PROMOTION_CLASS_NAVAL_MELEE',   1, 15);
+
+-- ============================================================================
+-- 6c. BASIL RELIGIOUS WAR SUPPORT
+-- Keep the static Basil changes moderate. Conversion-target pseudoyields and
+-- custom religious operations are intentionally not added.
+-- ============================================================================
+
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseBasilWarUnitBuilds'),
+('RoseBasilWarDiplomacy');
+
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseBasilWarUnitBuilds', 'TRAIT_LEADER_BASIL', 'UnitPromotionClasses'),
+('RoseBasilWarDiplomacy',  'TRAIT_LEADER_BASIL', 'DiplomaticActions');
+
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseBasilWarUnitBuilds', 'PROMOTION_CLASS_HEAVY_CAVALRY', 1, 10),
+('RoseBasilWarUnitBuilds', 'PROMOTION_CLASS_LIGHT_CAVALRY', 1, 8),
+('RoseBasilWarDiplomacy',  'DIPLOACTION_DECLARE_HOLY_WAR',  1, 40);
+
+-- ============================================================================
+-- 6d. AGGRESSIVE MILITARY DIPLOMACY
+-- The base trait already favors denouncements, military production, and
+-- vulnerable enemy cities. The first long-run test at -8 produced no voluntary
+-- major-vs-major wars and no formal wars, while military leaders accumulated
+-- broad friendship networks. Raise the persistent penalty to -15 and favor
+-- both formal and surprise war. This remains below RH's -23 and leaves
+-- friendship, trade, peace, and city-state-war preferences untouched. It is an
+-- AI preference, not a visible unconditional opinion modifier, and stacks with
+-- the military-victory strategy's existing -50 only while that strategy runs.
+-- ============================================================================
+
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseAggressiveMilitaryPseudoYields'),
+('RoseAggressiveMilitaryDiplomacy');
+
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseAggressiveMilitaryPseudoYields', 'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'PseudoYields'),
+('RoseAggressiveMilitaryDiplomacy',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'DiplomaticActions');
+
+DELETE FROM AiFavoredItems
+WHERE ListType IN (
+    'RoseAggressiveMilitaryPseudoYields',
+    'RoseAggressiveMilitaryDiplomacy'
+);
+
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_DIPLOMATIC_BONUS',    1, -15),
+('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_FORMAL_WAR',  1,   0),
+('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_SURPRISE_WAR', 1,  0);
+
+-- ============================================================================
 -- 7. OTHER LEADER-SPECIFIC DISTRICTS
 -- ============================================================================
 

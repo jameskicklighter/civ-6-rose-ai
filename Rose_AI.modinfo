@@ -27,6 +27,13 @@
       <File>core/AI_BehaviorTrees.xml</File>
     </UpdateDatabase>
 
+    <AddUserInterfaces id="ROSE_AI_INGAME_BRIDGE">
+      <Properties>
+        <Context>InGame</Context>
+      </Properties>
+      <File>core/Rose_AI_InGame.xml</File>
+    </AddUserInterfaces>
+
     <AddGameplayScripts id="ROSE_AI_SCRIPTS">
       <File>core/Rose_AI_Gameplay.lua</File>
     </AddGameplayScripts>
@@ -45,5 +52,7 @@
     <File>core/AI_BehaviorTreeOps.sql</File>
     <File>core/AI_BehaviorTrees.xml</File>
     <File>core/Rose_AI_Gameplay.lua</File>
+    <File>core/Rose_AI_InGame.lua</File>
+    <File>core/Rose_AI_InGame.xml</File>
   </Files>
 </Mod>

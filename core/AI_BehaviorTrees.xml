@@ -13,7 +13,6 @@ How to read this file:
   Pillage Districts on Operation Pillage.
 
 Applied here:
-- New Rose District Pillage operation and tree.
 - Replacement Simple City Defense tree.
 - Replacement Naval Superiority Tree.
 - Naval Superiority team exclusions for non-naval unit categories.
@@ -46,25 +45,7 @@ Not applied here:
   use lower force/odds gates so the AI can react to an ongoing conflict.
   -->
 
-  <!--
-  New operation: Rose District Pillage
-
-  Purpose:
-  Give the AI a small cavalry-only raiding operation that targets enemy
-  passive districts during war. This is safer than replacing city attack trees
-  because it adds a new operation instead of changing the core siege logic.
-
-  Expected in-game effect:
-  AI cavalry should be more willing to form a small team, move toward enemy
-  districts, attack only when convenient, and pillage districts/improvements.
-  -->
-  <AiTeams>
-    <Row TeamName="Rose Pillage Team" />
-  </AiTeams>
-
   <AiOperationTeams>
-    <Row TeamName="Rose Pillage Team" OperationName="Rose District Pillage" InitialStrengthAdvantage="-1" OngoingStrengthAdvantage="-1" />
-
     <!--
     Base city-assault ratios require much larger strength advantages than the
     operations can usually recruit. Lower ratios let assembled forces proceed
@@ -87,12 +68,19 @@ Not applied here:
       <Where TeamName="City Attack Force" OperationName="Wartime Attack Walled City" />
       <Set InitialStrengthAdvantage="0.6" OngoingStrengthAdvantage="1.0" />
     </Update>
+    <!-- Soft role maxima were exceeded in logs; this hard cap permits one Settler plus at most two escorts. -->
+    <Update>
+      <Where TeamName="Settle City Team" OperationName="Settle New City" />
+      <Set MaxUnits="3" />
+    </Update>
+    <!-- Lua seeds one ship; local recruitment may add at most two nearby ships. -->
+    <Update>
+      <Where TeamName="Naval Superiority Force" OperationName="Naval Superiority" />
+      <Set MaxUnits="3" />
+    </Update>
   </AiOperationTeams>
 
   <OpTeamRequirements>
-    <!-- Keep the team small. Large raid teams stall while waiting for units. -->
-    <Row TeamName="Rose Pillage Team" AiType="UNITTYPE_CAVALRY" MinNumber="1" MaxNumber="2" />
-
     <!--
     Walled-city attacks require one actual bombard-capable siege unit.
     UNITTYPE_SIEGE_ALL is broader and also includes rams, towers, anti-air,
@@ -108,12 +96,28 @@ Not applied here:
       <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE_ALL" />
       <Set MinNumber="0" />
     </Update>
+    <!-- The base Siege City Assault tree already directs recruited bombers. -->
+    <Update>
+      <Where TeamName="City Attack Force" AiType="UNITTYPE_AIR_SIEGE" />
+      <Set MinNumber="0" MaxNumber="2" />
+    </Update>
+
+    <!--
+    City Defense may steal nearby generic combat units from other operations.
+    Exclude bombard units so emergency defense cannot drain the mandatory siege
+    unit from a walled-city assault and trigger replacement contracts. Keep the
+    broader SIEGE_ALL role available because it also includes defensive anti-air.
+    -->
+    <Replace TeamName="City Defense" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
+
+    <!-- Bombers are AIR_SIEGE rather than AIR and cannot execute the simple attack tree's ground movement. -->
+    <Replace TeamName="Simple Early Attack Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
 
     <!--
     Settlement operations need one escort but should not absorb an unlimited
-    number of combat units or divert bombard/support units from city attacks.
-    Two simultaneous settlement operations can each recruit at most two
-    ordinary combat escorts; siege-tagged units are excluded from the team.
+    number of combat units or divert bombard/support/air units from city attacks.
+    The single active settlement operation can recruit at most two ordinary
+    combat escorts; siege-tagged and bomber units are excluded from the team.
     -->
     <Update>
       <Where TeamName="Settle City Team" AiType="UNITAI_COMBAT" />
@@ -121,8 +125,17 @@ Not applied here:
     </Update>
     <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE_ALL" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Settle City Team" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
 
-    <!-- UNITTYPE_NAVAL alone does not stop generic melee/ranged roles from selecting land or air units. -->
+    <!--
+    Keep the scripted ship-interception force small and combat-only.
+    UNITTYPE_NAVAL alone does not stop generic melee/ranged roles from selecting
+    land or air units, while the base civilian-leader allowance admitted teams
+    made mostly or entirely of Great Admirals.
+    -->
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_MELEE" MinNumber="1" MaxNumber="2" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_RANGED" MinNumber="0" MaxNumber="1" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_CIVILIAN_LEADER" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_LAND_COMBAT" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
@@ -130,8 +143,11 @@ Not applied here:
   </OpTeamRequirements>
 
   <AiOperationDefs>
-    <!-- Passive districts excludes Encampments. Distances are capped to avoid cross-map suicide raids. -->
-    <Row OperationName="Rose District Pillage" TargetType="TARGET_ENEMY_PASSIVE_DISTRICT" EnemyType="WAR" OperationType="OP_PILLAGE" BehaviorTree="Rose District Pillage Tree" Priority="2" SelfStart="true" MaxTargetDistInRegion="10" MaxTargetDistInArea="10" MaxTargetDistInWorld="10" MinOddsOfSuccess="0.33" MustHaveUnits="1" />
+    <!-- Native self-start produced hundreds of empty operations. Lua now starts this only for a real ship-vs-ship target. -->
+    <Update>
+      <Where OperationName="Naval Superiority" />
+      <Set SelfStart="false" />
+    </Update>
 
     <!--
     Keep walled-city assaults local so one AI does not split its army and
@@ -146,87 +162,6 @@ Not applied here:
       <Set MaxTargetDistInRegion="8" MaxTargetDistInArea="8" MaxTargetDistInWorld="10" />
     </Update>
   </AiOperationDefs>
-
-  <AllowedOperations>
-    <Row ListType="Default_List" OperationDef="Rose District Pillage" />
-  </AllowedOperations>
-
-  <BehaviorTrees>
-    <Row TreeName="Rose District Pillage Tree" />
-  </BehaviorTrees>
-
-  <BehaviorTreeNodes>
-    <!--
-    Rose District Pillage Tree structure:
-
-    Node 1 Sequence runs the whole raid in order.
-      Node 2 Decode Trigger reads the target district/location from the operation.
-      Node 3 Concurrent is the first approach block.
-        Defend nearby vulnerable units, create a recruitment contract, recruit units,
-        optionally attack nearby enemies, pillage valid adjacent targets, and move
-        toward the target. Pillaging stays active during the approach because the
-        movement node does not reliably report success at the target.
-      Node 17 Concurrent is the final pillage block.
-        Keep defending/recruiting and pillage anything valid nearby. The operation
-        uses one or two cavalry units so it can begin without a large muster.
-
-    The original retarget block was removed because Operation Change Target failed
-    whenever no replacement target existed, preventing the final pillage block.
-    -->
-    <Row NodeType="Sequence" NodeId="1" TreeName="Rose District Pillage Tree" JumpTo="21" />
-      <Row NodeType="Decode Trigger" NodeId="2" TreeName="Rose District Pillage Tree" />
-      <Row NodeType="Concurrent" NodeId="3" TreeName="Rose District Pillage Tree" JumpTo="17" />
-        <Row NodeType="Operation Defend Units" NodeId="4" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Contract Manager Decorator" NodeId="5" TreeName="Rose District Pillage Tree" JumpTo="7" />
-          <Row NodeType="Recruit Units" NodeId="6" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Attack Units" NodeId="7" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Pillage" NodeId="8" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Move" NodeId="9" TreeName="Rose District Pillage Tree" />
-      <Row NodeType="Concurrent" NodeId="17" TreeName="Rose District Pillage Tree" JumpTo="21" />
-        <Row NodeType="Operation Defend Units" NodeId="18" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Recruit Units" NodeId="19" TreeName="Rose District Pillage Tree" />
-        <Row NodeType="Operation Pillage" NodeId="20" TreeName="Rose District Pillage Tree" />
-  </BehaviorTreeNodes>
-
-  <TreeData>
-    <!-- Decode Trigger outputs: these provide target units/buildings/improvements/city/location/value slots. -->
-    <Row DefnId="0" NodeId="2" TreeName="Rose District Pillage Tree" Tag="Unused" />
-    <Row DefnId="1" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="2" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="3" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="4" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="5" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="6" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="7" NodeId="2" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="8" NodeId="2" TreeName="Rose District Pillage Tree" Tag="Present Value" />
-
-    <!-- First approach block. -->
-    <Row DefnId="0" NodeId="4" TreeName="Rose District Pillage Tree" DefaultData="40" /> <!-- Operation Defend Units: AutoProtect Percentage. -->
-    <Row DefnId="0" NodeId="5" TreeName="Rose District Pillage Tree" Tag="Recruitment Contract" /> <!-- Contract Manager: shared contract id. -->
-    <Row DefnId="1" NodeId="5" TreeName="Rose District Pillage Tree" />
-    <Row DefnId="2" NodeId="5" TreeName="Rose District Pillage Tree" DefaultData="5" /> <!-- Contract Manager: turn limit. -->
-    <Row DefnId="3" NodeId="5" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Contract Manager: do not block while running. -->
-    <Row DefnId="0" NodeId="6" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Recruit Units: not already in progress. -->
-    <Row DefnId="1" NodeId="6" TreeName="Rose District Pillage Tree" Tag="Recruitment Contract" />
-    <Row DefnId="4" NodeId="6" TreeName="Rose District Pillage Tree" Tag="Present Value" />
-    <Row DefnId="0" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: do not chase nearby targets early. -->
-    <Row DefnId="1" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: do not attack along march early. -->
-    <Row DefnId="2" NodeId="7" TreeName="Rose District Pillage Tree" DefaultData="false" /> <!-- Attack Units: avoid unequal attacks. -->
-    <Row DefnId="0" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage districts during the approach. -->
-    <Row DefnId="1" NodeId="8" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Pillage improvements during the approach. -->
-    <Row DefnId="0" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="1" /> <!-- Move To enum. -->
-    <Row DefnId="1" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="2" /> <!-- Range to goal. -->
-    <Row DefnId="2" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="true" /> <!-- Validate new units. -->
-    <Row DefnId="3" NodeId="9" TreeName="Rose District Pillage Tree" DefaultData="2" /> <!-- Unit spacing. -->
-
-    <!-- Final pillage block. -->
-    <Row DefnId="0" NodeId="18" TreeName="Rose District Pillage Tree" DefaultData="35" />
-    <Row DefnId="0" NodeId="19" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="2" NodeId="19" TreeName="Rose District Pillage Tree" DefaultData="4" /> <!-- Recruit Range. -->
-    <Row DefnId="4" NodeId="19" TreeName="Rose District Pillage Tree" Tag="Present Value" />
-    <Row DefnId="0" NodeId="20" TreeName="Rose District Pillage Tree" DefaultData="true" />
-    <Row DefnId="1" NodeId="20" TreeName="Rose District Pillage Tree" DefaultData="true" />
-  </TreeData>
 
   <!--
   Existing tree tuning: Simple Operation Attack
@@ -296,42 +231,38 @@ Not applied here:
   Replacement: Naval Superiority Tree
 
   Purpose:
-  Give the naval operation clearer phases: decode target, assemble a naval
-  force, choose a sea target, move/attack, pillage, then patrol.
+  Turn a visible Lua-selected enemy ship into a focused, time-boxed interception.
+  One seeded naval-melee ship may recruit at most two nearby uncommitted ships.
 
   Expected in-game effect:
-  Naval units should spend less time wandering and should more often attack,
-  pillage, or patrol around sea targets.
+  Small fleets should close on enemy ships and attack without absorbing the
+  entire nearby navy, recruiting Great Admirals, or failing because no coastal
+  pillage target happens to exist.
 
-  Rose corrections from RH:
-  - RH placed Recruit Units Allow Creation on NodeId 4, but NodeId 4 is the
-    Contract Manager Decorator. This copy puts it on NodeId 5.
-  - RH placed the Naval Pillage data on NodeId 18, but NodeId 18 is Naval Patrol.
-    This copy puts it on NodeId 17, the actual Naval Pillage node.
-  - RH added a Priority -> Can Alpha City gate before target selection. Naval
-    operations frequently have no alpha city, so that gate stopped the entire
-    sequence. Target selection now follows recruitment and defense directly.
+  Rose keeps the base tree's distinct initial and ongoing recruitment phases,
+  but neither phase may create units or steal from other operations. Dynamic
+  target selection does not fail when the originally observed ship disappears;
+  a patrol sibling keeps the surviving force useful during the short retry
+  window. The base Naval Pillage branch remains omitted.
   -->
   <BehaviorTreeNodes>
     <Delete TreeName="Naval Superiority Tree" />
 
-    <Row NodeType="Sequence" NodeId="0" TreeName="Naval Superiority Tree" JumpTo="19" />
+    <Row NodeType="Sequence" NodeId="0" TreeName="Naval Superiority Tree" JumpTo="15" />
       <Row NodeType="Decode Trigger" NodeId="1" TreeName="Naval Superiority Tree" />
-      <Row NodeType="Concurrent" NodeId="2" TreeName="Naval Superiority Tree" JumpTo="7" />
+      <Row NodeType="Concurrent" NodeId="2" TreeName="Naval Superiority Tree" JumpTo="6" />
         <Row NodeType="Operation Defend Units" NodeId="3" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Contract Manager Decorator" NodeId="4" TreeName="Naval Superiority Tree" JumpTo="6" />
-          <Row NodeType="Recruit Units" NodeId="5" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Operation Attack Units" NodeId="6" TreeName="Naval Superiority Tree" />
-      <Row NodeType="Concurrent" NodeId="7" TreeName="Naval Superiority Tree" JumpTo="19" />
-        <Row NodeType="Recruit Units" NodeId="8" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Operation Defend Units" NodeId="9" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Naval Choose Target" NodeId="12" TreeName="Naval Superiority Tree" JumpTo="16" />
-          <Row NodeType="Concurrent" NodeId="13" TreeName="Naval Superiority Tree" JumpTo="16" />
-            <Row NodeType="Operation Move" NodeId="14" TreeName="Naval Superiority Tree" />
-            <Row NodeType="Operation Attack Units" NodeId="15" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Operation Attack City" NodeId="16" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Naval Pillage" NodeId="17" TreeName="Naval Superiority Tree" />
-        <Row NodeType="Naval Patrol" NodeId="18" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Recruit Units" NodeId="4" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Operation Attack Units" NodeId="5" TreeName="Naval Superiority Tree" />
+      <Row NodeType="Turn Limiter" NodeId="6" TreeName="Naval Superiority Tree" JumpTo="15" />
+        <Row NodeType="Concurrent" NodeId="7" TreeName="Naval Superiority Tree" JumpTo="15" />
+          <Row NodeType="Recruit Units" NodeId="8" TreeName="Naval Superiority Tree" />
+          <Row NodeType="Operation Defend Units" NodeId="9" TreeName="Naval Superiority Tree" />
+          <Row NodeType="Naval Choose Target" NodeId="10" TreeName="Naval Superiority Tree" JumpTo="14" />
+            <Row NodeType="Concurrent" NodeId="11" TreeName="Naval Superiority Tree" JumpTo="14" />
+              <Row NodeType="Operation Move" NodeId="12" TreeName="Naval Superiority Tree" />
+              <Row NodeType="Operation Attack Units" NodeId="13" TreeName="Naval Superiority Tree" />
+          <Row NodeType="Naval Patrol" NodeId="14" TreeName="Naval Superiority Tree" />
   </BehaviorTreeNodes>
 
   <TreeData>
@@ -346,33 +277,41 @@ Not applied here:
     <Row DefnId="6" NodeId="1" TreeName="Naval Superiority Tree" />
     <Row DefnId="7" NodeId="1" TreeName="Naval Superiority Tree" />
     <Row DefnId="8" NodeId="1" TreeName="Naval Superiority Tree" Tag="Present Value" />
-    <Row DefnId="0" NodeId="3" TreeName="Naval Superiority Tree" DefaultData="50" /> <!-- Defend Units: AutoProtect Percentage. -->
-    <Row DefnId="0" NodeId="4" TreeName="Naval Superiority Tree" Tag="Naval Force Contract" />
-    <Row DefnId="1" NodeId="4" TreeName="Naval Superiority Tree" />
-    <Row DefnId="2" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="10" />
-    <Row DefnId="3" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="0" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="1" NodeId="5" TreeName="Naval Superiority Tree" Tag="Naval Force Contract" />
-    <Row DefnId="3" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="true" /> <!-- Recruit Units: allow creation. -->
-    <Row DefnId="4" NodeId="5" TreeName="Naval Superiority Tree" Tag="Present Value" />
-    <Row DefnId="0" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="true" />
-    <Row DefnId="1" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="2" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="3" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="0" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <!--
+    Keep the ongoing branch alive for the full interception window. Without
+    Limit Is Min, setup can succeed before move/attack receives another tick.
+    -->
+    <Row DefnId="0" NodeId="3" TreeName="Naval Superiority Tree" DefaultData="35" />
+    <Row DefnId="0" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Initial recruitment phase. -->
+    <Row DefnId="2" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="3" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Existing ships only. -->
+    <Row DefnId="4" NodeId="4" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="5" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="6" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Do not steal from other operations. -->
+    <Row DefnId="0" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="8" />
+    <Row DefnId="1" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Finish cleanly after success. -->
+    <Row DefnId="2" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="true" /> <!-- Eight-turn minimum window. -->
+    <Row DefnId="0" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="true" /> <!-- Ongoing recruitment phase. -->
+    <Row DefnId="2" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="3" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Existing ships only. -->
     <Row DefnId="4" NodeId="8" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="5" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="6" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Do not steal from other operations. -->
     <Row DefnId="0" NodeId="9" TreeName="Naval Superiority Tree" DefaultData="35" />
-    <Row DefnId="0" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="DOMAIN_SEA" />
-    <Row DefnId="1" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Do not fail if no target exists. -->
-    <Row DefnId="0" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="1" />
-    <Row DefnId="1" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="3" />
-    <Row DefnId="2" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="3" NodeId="14" TreeName="Naval Superiority Tree" DefaultData="3" />
-    <Row DefnId="0" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="true" />
-    <Row DefnId="1" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="2" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="3" NodeId="15" TreeName="Naval Superiority Tree" DefaultData="false" />
-    <Row DefnId="0" NodeId="17" TreeName="Naval Superiority Tree" DefaultData="No Value" />
+    <Row DefnId="0" NodeId="10" TreeName="Naval Superiority Tree" DefaultData="DOMAIN_SEA" />
+    <Row DefnId="1" NodeId="10" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Retry when no naval target is currently available. -->
+    <Row DefnId="0" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="1" />
+    <Row DefnId="1" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="3" />
+    <Row DefnId="2" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="3" />
+    <Row DefnId="0" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="false" />
   </TreeData>
 
   <!--
@@ -380,8 +319,10 @@ Not applied here:
 
   These do not replace the full trees. They only adjust existing node data:
   - Recruit and contract turn limits on Siege City Assault.
-  - Give the Node 26 contract/diplomacy branch two turns instead of one.
-  - Allow stealing units for several Siege City Assault recruit nodes.
+  - Give each Node 26 pre-war limiter seven turns so its five-turn diplomacy
+    contract receives a count-six resolution tick before count seven fails.
+  - Allow stealing only during initial siege assembly; ongoing recruitment is
+    local and cannot strip distant operations.
   - Extend one Early City Assault turn limiter.
   -->
   <TreeData>
@@ -403,17 +344,31 @@ Not applied here:
     </Update>
     <Update>
       <Where DefnId="0" NodeId="26" TreeName="Siege City Assault" />
-      <Set DefaultData="2" />
+      <Set DefaultData="7" />
     </Update>
 
+    <Delete DefnId="6" NodeId="11" TreeName="Siege City Assault" />
     <Row DefnId="6" NodeId="11" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="6" NodeId="22" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="6" NodeId="36" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="6" NodeId="44" TreeName="Siege City Assault" DefaultData="true" />
+    <Delete DefnId="2" NodeId="22" TreeName="Siege City Assault" />
+    <Row DefnId="2" NodeId="22" TreeName="Siege City Assault" DefaultData="12" />
+    <Delete DefnId="6" NodeId="22" TreeName="Siege City Assault" />
+    <Row DefnId="6" NodeId="22" TreeName="Siege City Assault" DefaultData="false" />
+    <Delete DefnId="2" NodeId="36" TreeName="Siege City Assault" />
+    <Row DefnId="2" NodeId="36" TreeName="Siege City Assault" DefaultData="12" />
+    <Delete DefnId="6" NodeId="36" TreeName="Siege City Assault" />
+    <Row DefnId="6" NodeId="36" TreeName="Siege City Assault" DefaultData="false" />
+    <Delete DefnId="2" NodeId="44" TreeName="Siege City Assault" />
+    <Row DefnId="2" NodeId="44" TreeName="Siege City Assault" DefaultData="12" />
+    <Delete DefnId="6" NodeId="44" TreeName="Siege City Assault" />
+    <Row DefnId="6" NodeId="44" TreeName="Siege City Assault" DefaultData="false" />
 
     <Update>
       <Where DefnId="0" NodeId="16" TreeName="Early City Assault" />
       <Set DefaultData="13" />
+    </Update>
+    <Update>
+      <Where DefnId="0" NodeId="26" TreeName="Early City Assault" />
+      <Set DefaultData="7" />
     </Update>
   </TreeData>
 

@@ -1,49 +1,74 @@
 -- ============================================================================
--- Rose AI: Belief Yield Boosts
--- Belief selection is hardcoded — there's no AiLists system for beliefs.
--- Instead, we add AI-only yield bonuses via BeliefModifiers so that when
--- the AI picks these beliefs, it gains extra value on top of the base effect.
--- NOTE: These are ADDITIONAL yields stacked on the belief's normal effect.
+-- Rose AI: Dummy-Gold Belief Preferences
+-- ============================================================================
+-- RoseGoldBiases is the single source of truth for both the database modifiers
+-- and the Lua treasury clawback. Belief bonuses are fixed, empire-wide Gold;
+-- they apply only to an AI player that founded the religion containing them.
 -- ============================================================================
 
--- ============================================================================
--- 1. MODIFIERS — AI-only yield bonuses
--- ============================================================================
+CREATE TABLE IF NOT EXISTS RoseGoldBiases (
+    BiasId     TEXT    NOT NULL PRIMARY KEY,
+    SourceKind TEXT    NOT NULL,
+    SourceType TEXT    NOT NULL,
+    Amount     INTEGER NOT NULL,
+    GateType   TEXT    NOT NULL DEFAULT 'ALWAYS',
+    GateValue  TEXT
+);
 
-INSERT OR IGNORE INTO Modifiers (ModifierId, ModifierType, SubjectRequirementSetId) VALUES
-('ROSE_BELIEF_WORK_ETHIC_BOOST',        'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI'),
-('ROSE_BELIEF_JESUIT_EDUCATION_BOOST',  'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI'),
-('ROSE_BELIEF_CHORAL_MUSIC_BOOST',      'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI'),
-('ROSE_BELIEF_FEED_THE_WORLD_BOOST',    'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI'),
-('ROSE_BELIEF_ZEN_MEDITATION_BOOST',    'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI'),
-('ROSE_BELIEF_RELIGIOUS_COMMUNITY_BOOST','MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI'),
-('ROSE_BELIEF_CRUSADE_BOOST',           'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE', 'PLAYER_IS_AI');
+CREATE TABLE IF NOT EXISTS RoseGoldBiasDistricts (
+    BiasId      TEXT NOT NULL,
+    DistrictType TEXT NOT NULL,
+    PRIMARY KEY (BiasId, DistrictType)
+);
 
-INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value) VALUES
-('ROSE_BELIEF_WORK_ETHIC_BOOST',       'YieldType', 'YIELD_PRODUCTION'),
-('ROSE_BELIEF_WORK_ETHIC_BOOST',       'Amount',    1),
-('ROSE_BELIEF_JESUIT_EDUCATION_BOOST', 'YieldType', 'YIELD_SCIENCE'),
-('ROSE_BELIEF_JESUIT_EDUCATION_BOOST', 'Amount',    1),
-('ROSE_BELIEF_CHORAL_MUSIC_BOOST',     'YieldType', 'YIELD_CULTURE'),
-('ROSE_BELIEF_CHORAL_MUSIC_BOOST',     'Amount',    1),
-('ROSE_BELIEF_FEED_THE_WORLD_BOOST',   'YieldType', 'YIELD_FOOD'),
-('ROSE_BELIEF_FEED_THE_WORLD_BOOST',   'Amount',    1),
-('ROSE_BELIEF_ZEN_MEDITATION_BOOST',   'YieldType', 'YIELD_FOOD'),
-('ROSE_BELIEF_ZEN_MEDITATION_BOOST',   'Amount',    1),
-('ROSE_BELIEF_RELIGIOUS_COMMUNITY_BOOST','YieldType', 'YIELD_GOLD'),
-('ROSE_BELIEF_RELIGIOUS_COMMUNITY_BOOST','Amount',    1),
-('ROSE_BELIEF_CRUSADE_BOOST',          'YieldType', 'YIELD_GOLD'),
-('ROSE_BELIEF_CRUSADE_BOOST',          'Amount',    1);
+CREATE TABLE IF NOT EXISTS RoseGoldBiasResolvedDistricts (
+    BiasId      TEXT NOT NULL,
+    DistrictType TEXT NOT NULL,
+    PRIMARY KEY (BiasId, DistrictType)
+);
 
--- ============================================================================
--- 2. BELIEF → MODIFIER LINKS
--- ============================================================================
+INSERT OR REPLACE INTO RoseGoldBiases
+    (BiasId, SourceKind, SourceType, Amount, GateType) VALUES
+('ROSE_GOLD_BELIEF_WORK_ETHIC',          'BELIEF', 'BELIEF_WORK_ETHIC',          20, 'FOUNDER'),
+('ROSE_GOLD_BELIEF_JESUIT_EDUCATION',    'BELIEF', 'BELIEF_JESUIT_EDUCATION',    20, 'FOUNDER'),
+('ROSE_GOLD_BELIEF_CHORAL_MUSIC',        'BELIEF', 'BELIEF_CHORAL_MUSIC',        20, 'FOUNDER'),
+('ROSE_GOLD_BELIEF_FEED_THE_WORLD',      'BELIEF', 'BELIEF_FEED_THE_WORLD',      20, 'FOUNDER'),
+('ROSE_GOLD_BELIEF_ZEN_MEDITATION',      'BELIEF', 'BELIEF_ZEN_MEDITATION',      20, 'FOUNDER'),
+('ROSE_GOLD_BELIEF_RELIGIOUS_COMMUNITY', 'BELIEF', 'BELIEF_RELIGIOUS_COMMUNITY', 20, 'FOUNDER'),
+-- Crusade's internal type remains BELIEF_JUST_WAR.
+('ROSE_GOLD_BELIEF_CRUSADE',             'BELIEF', 'BELIEF_JUST_WAR',            20, 'FOUNDER');
 
-INSERT OR IGNORE INTO BeliefModifiers (BeliefType, ModifierId) VALUES
-('BELIEF_WORK_ETHIC',        'ROSE_BELIEF_WORK_ETHIC_BOOST'),
-('BELIEF_JESUIT_EDUCATION',  'ROSE_BELIEF_JESUIT_EDUCATION_BOOST'),
-('BELIEF_CHORAL_MUSIC',      'ROSE_BELIEF_CHORAL_MUSIC_BOOST'),
-('BELIEF_FEED_THE_WORLD',    'ROSE_BELIEF_FEED_THE_WORLD_BOOST'),
-('BELIEF_ZEN_MEDITATION',    'ROSE_BELIEF_ZEN_MEDITATION_BOOST'),
-('BELIEF_RELIGIOUS_COMMUNITY','ROSE_BELIEF_RELIGIOUS_COMMUNITY_BOOST'),
-('BELIEF_JUST_WAR',          'ROSE_BELIEF_CRUSADE_BOOST');
+INSERT OR IGNORE INTO RequirementSets
+    (RequirementSetId, RequirementSetType) VALUES
+('ROSE_GOLD_AI_RELIGION_FOUNDER', 'REQUIREMENTSET_TEST_ALL');
+
+INSERT OR IGNORE INTO RequirementSetRequirements
+    (RequirementSetId, RequirementId) VALUES
+('ROSE_GOLD_AI_RELIGION_FOUNDER', 'REQUIRES_PLAYER_IS_AI'),
+('ROSE_GOLD_AI_RELIGION_FOUNDER', 'REQUIRES_PLAYER_FOUNDED_RELIGION');
+
+INSERT OR IGNORE INTO Modifiers
+    (ModifierId, ModifierType, SubjectRequirementSetId)
+SELECT b.BiasId,
+       'MODIFIER_PLAYER_ADJUST_YIELD_CHANGE',
+       'ROSE_GOLD_AI_RELIGION_FOUNDER'
+FROM RoseGoldBiases b
+JOIN Beliefs source ON source.BeliefType = b.SourceType
+WHERE b.SourceKind = 'BELIEF';
+
+INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value)
+SELECT b.BiasId, 'YieldType', 'YIELD_GOLD'
+FROM RoseGoldBiases b
+JOIN Beliefs source ON source.BeliefType = b.SourceType
+WHERE b.SourceKind = 'BELIEF'
+UNION ALL
+SELECT b.BiasId, 'Amount', b.Amount
+FROM RoseGoldBiases b
+JOIN Beliefs source ON source.BeliefType = b.SourceType
+WHERE b.SourceKind = 'BELIEF';
+
+INSERT OR IGNORE INTO BeliefModifiers (BeliefType, ModifierId)
+SELECT b.SourceType, b.BiasId
+FROM RoseGoldBiases b
+JOIN Beliefs source ON source.BeliefType = b.SourceType
+WHERE b.SourceKind = 'BELIEF';

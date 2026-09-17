@@ -1,74 +1,93 @@
 -- ============================================================================
--- Rose AI: Dummy-Gold Belief Preferences
+-- Rose AI: Scoring-only belief choice signals
 -- ============================================================================
--- RoseGoldBiases is the single source of truth for both the database modifiers
--- and the Lua treasury clawback. Belief bonuses are fixed, empire-wide Gold;
--- they apply only to an AI player that founded the religion containing them.
+-- Beliefs do not use a founded-religion gate here: the chooser evaluates
+-- beliefs before the religion exists.  The signal modifiers are registered by
+-- AI_Policies.sql with an AI-only owner gate and a permanently false subject
+-- gate, so they contribute context to AI choice scoring without changing
+-- gameplay yields or influence tokens.
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS RoseGoldBiases (
-    BiasId     TEXT    NOT NULL PRIMARY KEY,
-    SourceKind TEXT    NOT NULL,
-    SourceType TEXT    NOT NULL,
-    Amount     INTEGER NOT NULL,
-    GateType   TEXT    NOT NULL DEFAULT 'ALWAYS',
+CREATE TABLE IF NOT EXISTS RoseChoiceBiases (
+    BiasId     TEXT NOT NULL PRIMARY KEY,
+    SourceKind TEXT NOT NULL,
+    SourceType TEXT NOT NULL,
+    Amount     INTEGER NOT NULL DEFAULT 1,
+    GateType   TEXT NOT NULL DEFAULT 'ALWAYS',
     GateValue  TEXT
 );
 
-CREATE TABLE IF NOT EXISTS RoseGoldBiasDistricts (
+CREATE TABLE IF NOT EXISTS RoseChoiceDistricts (
     BiasId      TEXT NOT NULL,
     DistrictType TEXT NOT NULL,
+    YieldType   TEXT NOT NULL,
     PRIMARY KEY (BiasId, DistrictType)
 );
 
-CREATE TABLE IF NOT EXISTS RoseGoldBiasResolvedDistricts (
+CREATE TABLE IF NOT EXISTS RoseChoiceResolvedDistricts (
     BiasId      TEXT NOT NULL,
     DistrictType TEXT NOT NULL,
+    YieldType   TEXT NOT NULL,
     PRIMARY KEY (BiasId, DistrictType)
 );
 
-INSERT OR REPLACE INTO RoseGoldBiases
-    (BiasId, SourceKind, SourceType, Amount, GateType) VALUES
-('ROSE_GOLD_BELIEF_WORK_ETHIC',          'BELIEF', 'BELIEF_WORK_ETHIC',          20, 'FOUNDER'),
-('ROSE_GOLD_BELIEF_JESUIT_EDUCATION',    'BELIEF', 'BELIEF_JESUIT_EDUCATION',    20, 'FOUNDER'),
-('ROSE_GOLD_BELIEF_CHORAL_MUSIC',        'BELIEF', 'BELIEF_CHORAL_MUSIC',        20, 'FOUNDER'),
-('ROSE_GOLD_BELIEF_FEED_THE_WORLD',      'BELIEF', 'BELIEF_FEED_THE_WORLD',      20, 'FOUNDER'),
-('ROSE_GOLD_BELIEF_ZEN_MEDITATION',      'BELIEF', 'BELIEF_ZEN_MEDITATION',      20, 'FOUNDER'),
-('ROSE_GOLD_BELIEF_RELIGIOUS_COMMUNITY', 'BELIEF', 'BELIEF_RELIGIOUS_COMMUNITY', 20, 'FOUNDER'),
--- Crusade's internal type remains BELIEF_JUST_WAR.
-('ROSE_GOLD_BELIEF_CRUSADE',             'BELIEF', 'BELIEF_JUST_WAR',            20, 'FOUNDER');
+-- Remove the previous dummy-Gold attachments while preserving unrelated Rose
+-- modifiers. Zero any legacy amounts still present in the database. Saved
+-- modifier instances can persist separately, so validation needs a fresh game.
+DELETE FROM PolicyModifiers
+WHERE ModifierId GLOB 'ROSE_GOLD_*';
+DELETE FROM GovernmentModifiers
+WHERE ModifierId GLOB 'ROSE_GOLD_*';
+DELETE FROM BeliefModifiers
+WHERE ModifierId GLOB 'ROSE_GOLD_*';
+DELETE FROM PolicyModifiers
+WHERE ModifierId = 'ROSE_SERFDOM_INACTIVE_ENVOY_PROBE';
 
-INSERT OR IGNORE INTO RequirementSets
-    (RequirementSetId, RequirementSetType) VALUES
-('ROSE_GOLD_AI_RELIGION_FOUNDER', 'REQUIREMENTSET_TEST_ALL');
+UPDATE ModifierArguments
+SET Value = 0
+WHERE ModifierId GLOB 'ROSE_GOLD_*'
+  AND Name = 'Amount';
+UPDATE ModifierArguments
+SET Value = 0
+WHERE ModifierId = 'ROSE_SERFDOM_BUILDING_OFFSET'
+  AND Name = 'Amount';
+DELETE FROM BuildingModifiers
+WHERE BuildingType = 'BUILDING_ROSE_SERFDOM_OFFSET'
+   OR ModifierId = 'ROSE_SERFDOM_BUILDING_OFFSET';
+DELETE FROM GlobalParameters
+WHERE Name = 'ROSE_SERFDOM_EXPERIMENT_MODE';
 
-INSERT OR IGNORE INTO RequirementSetRequirements
-    (RequirementSetId, RequirementId) VALUES
-('ROSE_GOLD_AI_RELIGION_FOUNDER', 'REQUIRES_PLAYER_IS_AI'),
-('ROSE_GOLD_AI_RELIGION_FOUNDER', 'REQUIRES_PLAYER_FOUNDED_RELIGION');
+DROP TABLE IF EXISTS RoseGoldBiasResolvedDistricts;
+DROP TABLE IF EXISTS RoseGoldBiasDistricts;
+DROP TABLE IF EXISTS RoseGoldBiases;
 
-INSERT OR IGNORE INTO Modifiers
-    (ModifierId, ModifierType, SubjectRequirementSetId)
-SELECT b.BiasId,
-       'MODIFIER_PLAYER_ADJUST_YIELD_CHANGE',
-       'ROSE_GOLD_AI_RELIGION_FOUNDER'
-FROM RoseGoldBiases b
-JOIN Beliefs source ON source.BeliefType = b.SourceType
-WHERE b.SourceKind = 'BELIEF';
+-- Clear any previous run of the scoring-only registry and its attachments.
+DELETE FROM PolicyModifiers
+WHERE ModifierId GLOB 'ROSE_CHOICE_*';
+DELETE FROM GovernmentModifiers
+WHERE ModifierId GLOB 'ROSE_CHOICE_*';
+DELETE FROM BeliefModifiers
+WHERE ModifierId GLOB 'ROSE_CHOICE_*';
+DELETE FROM RoseChoiceResolvedDistricts;
+DELETE FROM RoseChoiceDistricts;
+DELETE FROM RoseChoiceBiases;
 
-INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value)
-SELECT b.BiasId, 'YieldType', 'YIELD_GOLD'
-FROM RoseGoldBiases b
-JOIN Beliefs source ON source.BeliefType = b.SourceType
-WHERE b.SourceKind = 'BELIEF'
-UNION ALL
-SELECT b.BiasId, 'Amount', b.Amount
-FROM RoseGoldBiases b
-JOIN Beliefs source ON source.BeliefType = b.SourceType
-WHERE b.SourceKind = 'BELIEF';
-
-INSERT OR IGNORE INTO BeliefModifiers (BeliefType, ModifierId)
-SELECT b.SourceType, b.BiasId
-FROM RoseGoldBiases b
-JOIN Beliefs source ON source.BeliefType = b.SourceType
-WHERE b.SourceKind = 'BELIEF';
+-- Belief targets mirror the former preference set.  Crusade remains
+-- warmonger-specific; all other beliefs are available to every AI chooser.
+INSERT OR REPLACE INTO RoseChoiceBiases
+    (BiasId, SourceKind, SourceType, Amount, GateType, GateValue) VALUES
+('ROSE_CHOICE_BELIEF_WORK_ETHIC',
+ 'BELIEF', 'BELIEF_WORK_ETHIC', 1, 'ALWAYS', NULL),
+('ROSE_CHOICE_BELIEF_JESUIT_EDUCATION',
+ 'BELIEF', 'BELIEF_JESUIT_EDUCATION', 1, 'ALWAYS', NULL),
+('ROSE_CHOICE_BELIEF_CHORAL_MUSIC',
+ 'BELIEF', 'BELIEF_CHORAL_MUSIC', 1, 'ALWAYS', NULL),
+('ROSE_CHOICE_BELIEF_FEED_THE_WORLD',
+ 'BELIEF', 'BELIEF_FEED_THE_WORLD', 1, 'ALWAYS', NULL),
+('ROSE_CHOICE_BELIEF_ZEN_MEDITATION',
+ 'BELIEF', 'BELIEF_ZEN_MEDITATION', 1, 'ALWAYS', NULL),
+('ROSE_CHOICE_BELIEF_RELIGIOUS_COMMUNITY',
+ 'BELIEF', 'BELIEF_RELIGIOUS_COMMUNITY', 1, 'ALWAYS', NULL),
+('ROSE_CHOICE_BELIEF_CRUSADE',
+ 'BELIEF', 'BELIEF_JUST_WAR', 1, 'LEADER_TRAIT',
+ 'TRAIT_LEADER_AGGRESSIVE_MILITARY');

@@ -22,10 +22,9 @@
 --    soon as a newly completed civic unlocks its replacement. This avoids the
 --    delayed-obsolescence rollover path that can suppress all policy effects.
 --
--- 6. Dummy-Gold clawback: database modifiers give selected policies, beliefs,
---    and governments a visible AI valuation. A persistent turn ledger removes
---    the configured Gold amount before the AI acts on its next turn.
---    Serfdom's isolated experiment instead uses a capital marker's offset.
+-- 6. Inactive choice signals: SQL supplies scoring probes with impossible
+--    gameplay requirements. Lua only logs choices and removes retired offset
+--    buildings from old saves; it never pays or deducts preference yields.
 -- ============================================================================
 
 print("Rose AI: Loading gameplay support script");
@@ -75,78 +74,11 @@ for kObsoleteInfo in GameInfo.ObsoletePolicies() do
 	end
 end
 
--- Cache the database-authored dummy-Gold ledger. Amounts deliberately live in
--- RoseGoldBiases rather than in Lua so modifier payouts and clawbacks cannot
--- drift apart when tuning values later.
-local tGoldBiases = {};
-local tGoldBiasDistricts = {};
-local tGoldGateDistrictIndices = {};
-local tGoldPolicyTypes = {};
-local tGoldBeliefTypes = {};
-if GameInfo.RoseGoldBiases ~= nil then
-	for kBias in GameInfo.RoseGoldBiases() do
-		local kEntry = {
-			BiasId = kBias.BiasId,
-			SourceKind = kBias.SourceKind,
-			SourceType = kBias.SourceType,
-			Amount = tonumber(kBias.Amount) or 0,
-			GateType = kBias.GateType or "ALWAYS",
-			GateValue = kBias.GateValue,
-		};
-		table.insert(tGoldBiases, kEntry);
-		if kEntry.SourceKind == "POLICY" then
-			tGoldPolicyTypes[kEntry.SourceType] = true;
-		elseif kEntry.SourceKind == "BELIEF" then
-			tGoldBeliefTypes[kEntry.SourceType] = true;
-		end
-	end
-end
-if GameInfo.RoseGoldBiasResolvedDistricts ~= nil then
-	for kGate in GameInfo.RoseGoldBiasResolvedDistricts() do
-		local tDistricts = tGoldBiasDistricts[kGate.BiasId];
-		if tDistricts == nil then
-			tDistricts = {};
-			tGoldBiasDistricts[kGate.BiasId] = tDistricts;
-		end
-		tDistricts[kGate.DistrictType] = true;
-		local kDistrict = GameInfo.Districts[kGate.DistrictType];
-		if kDistrict ~= nil then tGoldGateDistrictIndices[kGate.DistrictType] = kDistrict.Index; end
-	end
-end
-
--- Cache static leader tags once. Rose's own LeaderTraits changes have already
--- been applied when this gameplay script is loaded.
-local tLeaderTraits = {};
-for kLeaderTrait in GameInfo.LeaderTraits() do
-	local tTraits = tLeaderTraits[kLeaderTrait.LeaderType];
-	if tTraits == nil then
-		tTraits = {};
-		tLeaderTraits[kLeaderTrait.LeaderType] = tTraits;
-	end
-	tTraits[kLeaderTrait.TraitType] = true;
-end
-
-local GOLD_SNAPSHOT_INITIALIZED_PROPERTY = "ROSE_GOLD_BIAS_SNAPSHOT_INITIALIZED";
-local GOLD_SNAPSHOT_POLICIES_PROPERTY = "ROSE_GOLD_BIAS_SNAPSHOT_POLICIES";
-local GOLD_SNAPSHOT_POLICIES_VALID_PROPERTY = "ROSE_GOLD_BIAS_SNAPSHOT_POLICIES_ACTIVE_VALID";
-local GOLD_SNAPSHOT_GOVERNMENT_PROPERTY = "ROSE_GOLD_BIAS_SNAPSHOT_GOVERNMENT";
-local GOLD_SNAPSHOT_GOVERNMENT_VALID_PROPERTY = "ROSE_GOLD_BIAS_SNAPSHOT_GOVERNMENT_VALID";
-local GOLD_SNAPSHOT_BELIEFS_PROPERTY = "ROSE_GOLD_BIAS_SNAPSHOT_BELIEFS";
-local GOLD_LAST_CLAWBACK_TURN_PROPERTY = "ROSE_GOLD_BIAS_LAST_CLAWBACK_TURN";
-local GOLD_CLAWBACK_DEBT_PROPERTY = "ROSE_GOLD_BIAS_CLAWBACK_DEBT";
-local GOLD_CUMULATIVE_EXPECTED_PROPERTY = "ROSE_GOLD_BIAS_CUMULATIVE_EXPECTED";
-local GOLD_CUMULATIVE_DEDUCTED_PROPERTY = "ROSE_GOLD_BIAS_CUMULATIVE_DEDUCTED";
-
--- One database switch controls both the policy attachment and Lua accounting.
--- 0: baseline, 1: positive only, 2: building offset, 3: original clawback.
--- 4: inactive envoy scoring probe; no Serfdom Gold, marker, or clawback.
-local kSerfdomMode = GameInfo.GlobalParameters["ROSE_SERFDOM_EXPERIMENT_MODE"];
-local iSerfdomMode = kSerfdomMode ~= nil and tonumber(kSerfdomMode.Value) or 3;
-local kSerfdomBuilding = GameInfo.Buildings["BUILDING_ROSE_SERFDOM_OFFSET"];
-local iSerfdomBuilding = kSerfdomBuilding ~= nil and kSerfdomBuilding.Index or nil;
-local tSerfdomSyncing = {};
-local tSerfdomOffsetMeasured = {};
-local tGovernmentBridgeWarningTurn = {};
+-- Keep the retired marker definition only for saved-game cleanup. There is no
+-- creation path or treasury accounting in the inactive choice-signal experiment.
+local kRetiredMarker = GameInfo.Buildings["BUILDING_ROSE_SERFDOM_OFFSET"];
+local iRetiredMarker = kRetiredMarker ~= nil and kRetiredMarker.Index or nil;
+local tRetiredMarkerCleaning = {};
 
 -- ============================================================================
 -- Government civics table: grant when all prereqs are met
@@ -272,384 +204,80 @@ local function IsEligibleAIPlayer(pPlayer)
 		and not pPlayer:IsHuman();
 end
 
--- An unset Civ VI player property can return no Lua values rather than one nil
--- value. Passing that call directly to tonumber therefore becomes tonumber()
--- and raises an argument error. Capture it first so Lua normalizes the missing
--- return to nil, then apply the requested numeric default.
-local function GetNumericPlayerProperty(pPlayer, sPropertyName, iDefault)
-	local value = pPlayer:GetProperty(sPropertyName);
-	if value == nil then return iDefault; end
-	return tonumber(value) or iDefault;
+-- Removing a saved marker also removes its saved negative modifier instance.
+-- This does not attempt to reconstruct old policy/government/belief instances;
+-- the full experiment must be tested in a fresh game.
+local function CleanupRetiredMarker(iPlayerID)
+    local pPlayer = Players[iPlayerID];
+    if pPlayer == nil or iRetiredMarker == nil or tRetiredMarkerCleaning[iPlayerID] then return; end
+    local pCities = pPlayer:GetCities();
+    if pCities == nil then return; end
+    tRetiredMarkerCleaning[iPlayerID] = true;
+    local iRemoved = 0;
+    for _, pCity in pCities:Members() do
+        local pBuildings = pCity:GetBuildings();
+        if pBuildings:HasBuilding(iRetiredMarker) then
+            pBuildings:RemoveBuilding(iRetiredMarker);
+            iRemoved = iRemoved + 1;
+        end
+    end
+    tRetiredMarkerCleaning[iPlayerID] = nil;
+    if iRemoved > 0 then
+        print("Rose AI: Removed retired Serfdom markers player " .. iPlayerID .. " count " .. iRemoved);
+    end
 end
 
-local function SerializeStringSet(tValues)
-	local tSorted = {};
-	for sValue, bPresent in pairs(tValues) do
-		if bPresent then table.insert(tSorted, sValue); end
-	end
-	table.sort(tSorted);
-	return table.concat(tSorted, ",");
+local function CleanupAllRetiredMarkers()
+    for iPlayerID, _ in pairs(Players) do CleanupRetiredMarker(iPlayerID); end
 end
 
-local function DeserializeStringSet(sValues)
-	local tValues = {};
-	if type(sValues) ~= "string" or sValues == "" then return tValues; end
-	for sValue in string.gmatch(sValues, "[^,]+") do
-		tValues[sValue] = true;
-	end
-	return tValues;
-end
-
-local function GetSlottedGoldPolicyTypes(pPlayer, bRequireActive)
-	local tPolicies = {};
-	local pCulture = pPlayer:GetCulture();
-	if pCulture == nil then return tPolicies; end
-	for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
-		local iPolicy = pCulture:GetSlotPolicy(iSlot);
-		local kPolicy = iPolicy ~= nil and iPolicy >= 0
-			and GameInfo.Policies[iPolicy] or nil;
-		if kPolicy ~= nil and tGoldPolicyTypes[kPolicy.PolicyType]
-			and (not bRequireActive or pCulture:IsPolicyActive(iPolicy)) then
-			tPolicies[kPolicy.PolicyType] = true;
-		end
-	end
-	return tPolicies;
-end
-
--- Reconcile from actual slots, including after reload, obsolescence and capital
--- transfers. Remove stale copies first because each copy affects the player.
-local function GetNetGoldYield(pPlayer)
-	local pTreasury = pPlayer:GetTreasury();
-	if pTreasury ~= nil and pTreasury.GetGoldYield ~= nil
-		and pTreasury.GetTotalMaintenance ~= nil then
-		return pTreasury:GetGoldYield() - pTreasury:GetTotalMaintenance();
-	end
-	return nil;
-end
-
-local function SyncSerfdomOffset(iPlayerID, bAudit, sPhase)
-	local pPlayer = Players[iPlayerID];
-	if pPlayer == nil or iSerfdomBuilding == nil or tSerfdomSyncing[iPlayerID] then return; end
-	local pCities = pPlayer:GetCities();
-	if pCities == nil then return; end
-	tSerfdomSyncing[iPlayerID] = true;
-	local bEligible = IsEligibleAIPlayer(pPlayer);
-	local bSlotted = bEligible and GetSlottedGoldPolicyTypes(pPlayer)["POLICY_SERFDOM"] == true;
-	-- A slot alone does not establish that the card is currently enabled.
-	-- IsPolicyActive(index) is demonstrated in Firaxis' Black Death gameplay.
-	local bActive = bSlotted and pPlayer:GetCulture():IsPolicyActive(
-		GameInfo.Policies["POLICY_SERFDOM"].Index) == true;
-	local pCapital = pCities:GetCapitalCity();
-	local iWantedCity = iSerfdomMode == 2 and bActive and pCapital ~= nil
-		and pCapital:GetID() or -1;
-	local bChanged = false;
-	local iNetGoldBefore = GetNetGoldYield(pPlayer);
-	for _, pCity in pCities:Members() do
-		local pBuildings = pCity:GetBuildings();
-		if pCity:GetID() ~= iWantedCity and pBuildings:HasBuilding(iSerfdomBuilding) then
-			pBuildings:RemoveBuilding(iSerfdomBuilding);
-			bChanged = true;
-		end
-	end
-	if iWantedCity >= 0 then
-		local pBuildings = pCapital:GetBuildings();
-		-- Recreate a pillaged marker using the same known create/remove APIs.
-		if pBuildings:HasBuilding(iSerfdomBuilding) and pBuildings:IsPillaged(iSerfdomBuilding) then
-			pBuildings:RemoveBuilding(iSerfdomBuilding);
-			bChanged = true;
-		end
-		if not pBuildings:HasBuilding(iSerfdomBuilding) then
-			local pPlot = Map.GetPlot(pCapital:GetX(), pCapital:GetY());
-			if pPlot ~= nil then
-				pCapital:GetBuildQueue():CreateIncompleteBuilding(iSerfdomBuilding, pPlot:GetIndex(), 100);
-				bChanged = true;
-			end
-		end
-	end
-	-- One controlled measurement per player/session, at a turn boundary. No
-	-- income tick occurs between removing and restoring this internal marker.
-	-- Record observed values rather than assuming the engine refreshed yields.
-	if bAudit and iWantedCity >= 0 and not tSerfdomOffsetMeasured[iPlayerID]
-		and pCapital:GetBuildings():HasBuilding(iSerfdomBuilding) then
-		local pPlot = Map.GetPlot(pCapital:GetX(), pCapital:GetY());
-		local iWithMarker = GetNetGoldYield(pPlayer);
-		if pPlot ~= nil and iWithMarker ~= nil then
-			local iGoldBefore = pPlayer:GetTreasury():GetGoldBalance();
-			pCapital:GetBuildings():RemoveBuilding(iSerfdomBuilding);
-			local iWithoutMarker = GetNetGoldYield(pPlayer);
-			pCapital:GetBuildQueue():CreateIncompleteBuilding(iSerfdomBuilding, pPlot:GetIndex(), 100);
-			local iRestored = GetNetGoldYield(pPlayer);
-			tSerfdomOffsetMeasured[iPlayerID] = pCapital:GetBuildings():HasBuilding(iSerfdomBuilding);
-			bChanged = true;
-			print("Rose AI: Serfdom offset measurement turn " .. Game.GetCurrentGameTurn()
-				.. " player " .. iPlayerID .. " with " .. tostring(iWithMarker)
-				.. " without " .. tostring(iWithoutMarker) .. " restored " .. tostring(iRestored)
-				.. " marker_delta " .. tostring(iWithoutMarker ~= nil and iRestored ~= nil
-					and iRestored - iWithoutMarker or nil)
-				.. " treasury " .. iGoldBefore .. "->" .. pPlayer:GetTreasury():GetGoldBalance());
-		end
-	end
-	local iMarkers = 0;
-	for _, pCity in pCities:Members() do
-		if pCity:GetBuildings():HasBuilding(iSerfdomBuilding) then iMarkers = iMarkers + 1; end
-	end
-	tSerfdomSyncing[iPlayerID] = nil;
-	if iMarkers ~= (iWantedCity >= 0 and 1 or 0) then
-		print("Rose AI ERROR: Serfdom offset marker mismatch player " .. iPlayerID
-			.. " wanted_city " .. iWantedCity .. " markers " .. iMarkers);
-	end
-	if bChanged or (bAudit and bEligible and iSerfdomMode ~= 3) then
-		local pTreasury = pPlayer:GetTreasury();
-		local gold = pTreasury ~= nil and pTreasury:GetGoldBalance() or "unavailable";
-		local gpt = GetNetGoldYield(pPlayer);
-		local delta = gpt ~= nil and iNetGoldBefore ~= nil and gpt - iNetGoldBefore or nil;
-		print("Rose AI: Serfdom experiment turn " .. Game.GetCurrentGameTurn()
-			.. " player " .. iPlayerID .. " mode " .. iSerfdomMode
-			.. " phase " .. (sPhase or "change")
-			.. " slotted " .. tostring(bSlotted) .. " active " .. tostring(bActive)
-			.. " wanted_city " .. iWantedCity
-			.. " markers " .. iMarkers .. " gold " .. tostring(gold)
-			.. " net_gpt " .. tostring(gpt)
-			.. " marker_gpt_before " .. tostring(iNetGoldBefore)
-			.. " marker_gpt_delta " .. tostring(delta));
-	end
-end
-
-local function SyncAllSerfdomOffsets()
-	for iPlayerID, _ in pairs(Players) do SyncSerfdomOffset(iPlayerID, false); end
-end
-
--- Event payloads include extra positional values; do not treat them as bAudit.
-local function OnSerfdomPolicyChanged(iPlayerID)
-	SyncSerfdomOffset(iPlayerID, false);
-end
-
-local function OnSerfdomBuildingChanged(iPlayerID)
-	-- Includes Palace relocation and marker pillage/recreation. The per-player
-	-- guard prevents creation callbacks from recursively creating another copy.
-	SyncSerfdomOffset(iPlayerID, false);
-end
-
-local function GetCurrentGovernmentType(iPlayerID)
-	local kBridge = ExposedMembers.RoseAI;
-	if kBridge == nil or kBridge.GetCurrentGovernment == nil then return nil; end
-	local iGovernment = kBridge.GetCurrentGovernment(iPlayerID);
-	if type(iGovernment) ~= "number" then return nil; end
-	if iGovernment == -1 then return ""; end
-	local kGovernment = GameInfo.Governments[iGovernment];
-	return kGovernment ~= nil and kGovernment.GovernmentType or nil;
-end
-
-local function GetFoundedGoldBeliefTypes(iPlayerID)
-	local tBeliefs = {};
-	local bFounder = false;
-	local pGameReligion = Game.GetReligion();
-	if pGameReligion == nil or pGameReligion.GetReligions == nil then
-		return tBeliefs, bFounder;
-	end
-	for _, kReligion in ipairs(pGameReligion:GetReligions()) do
-		if kReligion.Founder == iPlayerID then
-			bFounder = true;
-			for _, iBelief in ipairs(kReligion.Beliefs or {}) do
-				local kBelief = GameInfo.Beliefs[iBelief];
-				if kBelief ~= nil and tGoldBeliefTypes[kBelief.BeliefType] then
-					tBeliefs[kBelief.BeliefType] = true;
-				end
-			end
-			break;
-		end
-	end
-	return tBeliefs, bFounder;
-end
-
-local function GetOwnedDistrictTypes(pPlayer)
-	local tDistricts = {};
-	for _, pCity in pPlayer:GetCities():Members() do
-		local pDistricts = pCity:GetDistricts();
-		if pDistricts ~= nil then
-			-- CityDistricts is not the iterable PlayerDistricts collection.
-			-- Firaxis queries built districts with HasDistrict(index, true).
-			if pDistricts.HasDistrict == nil then
-				print("Rose AI WARNING: City district lookup unavailable; district-gated clawbacks omitted");
-				return nil;
-			end
-			for sDistrictType, iDistrict in pairs(tGoldGateDistrictIndices) do
-				if not tDistricts[sDistrictType] and pDistricts:HasDistrict(iDistrict, true) then
-					tDistricts[sDistrictType] = true;
-				end
-			end
-		end
-	end
-	return tDistricts;
-end
-
-local function GetPlayerLeaderTraits(iPlayerID)
-	local kConfig = PlayerConfigurations[iPlayerID];
-	if kConfig == nil then return {}; end
-	local sLeaderType = kConfig:GetLeaderTypeName();
-	return tLeaderTraits[sLeaderType] or {};
-end
-
-local function StoreGoldBiasSnapshot(iPlayerID)
-	local pPlayer = Players[iPlayerID];
-	if not IsEligibleAIPlayer(pPlayer) then return; end
-	local tBeliefs = GetFoundedGoldBeliefTypes(iPlayerID);
-	pPlayer:SetProperty(GOLD_SNAPSHOT_POLICIES_PROPERTY,
-		SerializeStringSet(GetSlottedGoldPolicyTypes(pPlayer, true)));
-	pPlayer:SetProperty(GOLD_SNAPSHOT_POLICIES_VALID_PROPERTY, 1);
-	local sGovernment = GetCurrentGovernmentType(iPlayerID);
-	pPlayer:SetProperty(GOLD_SNAPSHOT_GOVERNMENT_VALID_PROPERTY, sGovernment ~= nil and 1 or 0);
-	if sGovernment ~= nil then
-		pPlayer:SetProperty(GOLD_SNAPSHOT_GOVERNMENT_PROPERTY, sGovernment);
-	elseif tGovernmentBridgeWarningTurn[iPlayerID] ~= Game.GetCurrentGameTurn() then
-		tGovernmentBridgeWarningTurn[iPlayerID] = Game.GetCurrentGameTurn();
-		print("Rose AI WARNING: Government bridge unavailable for player " .. iPlayerID
-			.. "; government clawback omitted for this snapshot (other sources continue)");
-	end
-	pPlayer:SetProperty(GOLD_SNAPSHOT_BELIEFS_PROPERTY,
-		SerializeStringSet(tBeliefs));
-	pPlayer:SetProperty(GOLD_SNAPSHOT_INITIALIZED_PROPERTY, 1);
-end
-
-local function GoldBiasGatePasses(
-	kBias, bFounder, tLeaderTags, tOwnedDistricts)
-	if kBias.GateType == "ALWAYS" then return true; end
-	if kBias.GateType == "FOUNDER" then return bFounder; end
-	if kBias.GateType == "NON_FOUNDER" then return not bFounder; end
-	if kBias.GateType == "LEADER_TRAIT" then
-		return kBias.GateValue ~= nil and tLeaderTags[kBias.GateValue] == true;
-	end
-	if kBias.GateType == "DISTRICT_ANY" then
-		local tQualifyingDistricts = tGoldBiasDistricts[kBias.BiasId];
-		if tQualifyingDistricts == nil or tOwnedDistricts == nil then return false; end
-		for sDistrictType, _ in pairs(tQualifyingDistricts) do
-			if tOwnedDistricts[sDistrictType] then return true; end
-		end
-	end
-	return false;
-end
-
-local function ApplyGoldBiasClawback(iPlayerID)
-	local pPlayer = Players[iPlayerID];
-	if not IsEligibleAIPlayer(pPlayer) then return; end
-	local iTurn = Game.GetCurrentGameTurn();
-	if GetNumericPlayerProperty(
-		pPlayer, GOLD_LAST_CLAWBACK_TURN_PROPERTY, -1) == iTurn then
-		return;
-	end
-
-	-- An older save has no prior-turn snapshot. Capture the live state before
-	-- Rose grants civics or clears obsolete policies, then account it once.
-	if GetNumericPlayerProperty(
-		pPlayer, GOLD_SNAPSHOT_INITIALIZED_PROPERTY, 0) ~= 1 then
-		StoreGoldBiasSnapshot(iPlayerID);
-		print("Rose AI: Initialized Gold-bias snapshot for AI player "
-			.. iPlayerID .. " on turn " .. iTurn);
-	end
-
-	local tSnapshotPolicies = DeserializeStringSet(
-		pPlayer:GetProperty(GOLD_SNAPSHOT_POLICIES_PROPERTY));
-	-- Old snapshots recorded slots without checking whether their effects were
-	-- active. Do not charge those unverified policy entries on migration.
-	local bSnapshotPoliciesValid = GetNumericPlayerProperty(
-		pPlayer, GOLD_SNAPSHOT_POLICIES_VALID_PROPERTY, 0) == 1;
-	local sSnapshotGovernment =
-		pPlayer:GetProperty(GOLD_SNAPSHOT_GOVERNMENT_PROPERTY) or "";
-	local bSnapshotGovernmentValid = GetNumericPlayerProperty(
-		pPlayer, GOLD_SNAPSHOT_GOVERNMENT_VALID_PROPERTY, 0) == 1;
-	local tSnapshotBeliefs = DeserializeStringSet(
-		pPlayer:GetProperty(GOLD_SNAPSHOT_BELIEFS_PROPERTY));
-	local _, bFounder = GetFoundedGoldBeliefTypes(iPlayerID);
-	local tLeaderTags = GetPlayerLeaderTraits(iPlayerID);
-	local tOwnedDistricts = GetOwnedDistrictTypes(pPlayer);
-
-	local iPolicyGold = 0;
-	local iTier3GenericGold = 0;
-	local iGovernmentSpecificGold = 0;
-	local iBeliefGold = 0;
-	for _, kBias in ipairs(tGoldBiases) do
-		local bSourceActive = false;
-		if kBias.SourceKind == "POLICY" then
-			bSourceActive = bSnapshotPoliciesValid and tSnapshotPolicies[kBias.SourceType] == true;
-			-- Only mode 3 charges Serfdom; all other modes, including 4, are exempt.
-			-- Preserve pre-existing debt and every other source's accounting.
-			if kBias.BiasId == "ROSE_GOLD_POLICY_SERFDOM" and iSerfdomMode ~= 3 then
-				bSourceActive = false;
-			end
-		elseif kBias.SourceKind == "GOVERNMENT" then
-			bSourceActive = bSnapshotGovernmentValid and sSnapshotGovernment == kBias.SourceType;
-		elseif kBias.SourceKind == "BELIEF" then
-			bSourceActive = tSnapshotBeliefs[kBias.SourceType] == true;
-		end
-		if bSourceActive and GoldBiasGatePasses(
-			kBias, bFounder, tLeaderTags, tOwnedDistricts) then
-			if kBias.SourceKind == "POLICY" then
-				iPolicyGold = iPolicyGold + kBias.Amount;
-			elseif kBias.SourceKind == "BELIEF" then
-				iBeliefGold = iBeliefGold + kBias.Amount;
-			elseif kBias.GateType == "ALWAYS"
-				and (kBias.SourceType == "GOVERNMENT_COMMUNISM"
-					or kBias.SourceType == "GOVERNMENT_DEMOCRACY"
-					or kBias.SourceType == "GOVERNMENT_FASCISM") then
-				iTier3GenericGold = iTier3GenericGold + kBias.Amount;
-			else
-				iGovernmentSpecificGold = iGovernmentSpecificGold + kBias.Amount;
-			end
-		end
-	end
-
-	local iNewExpected = iPolicyGold + iTier3GenericGold
-		+ iGovernmentSpecificGold + iBeliefGold;
-	local iPriorDebt = GetNumericPlayerProperty(
-		pPlayer, GOLD_CLAWBACK_DEBT_PROPERTY, 0);
-	local iTotalDue = iNewExpected + iPriorDebt;
-	local iRemoved = 0;
-	local iBalanceBefore = 0;
-	local iBalanceAfter = 0;
-	if iTotalDue > 0 then
-		local pTreasury = pPlayer:GetTreasury();
-		iBalanceBefore = pTreasury:GetGoldBalance();
-		pTreasury:ChangeGoldBalance(-iTotalDue);
-		iBalanceAfter = pTreasury:GetGoldBalance();
-		iRemoved = iBalanceBefore - iBalanceAfter;
-	end
-
-	local iRemainingDebt = math.max(0, iTotalDue - iRemoved);
-	local iCumulativeExpected = GetNumericPlayerProperty(
-		pPlayer, GOLD_CUMULATIVE_EXPECTED_PROPERTY, 0)
-		+ iNewExpected;
-	local iCumulativeDeducted = GetNumericPlayerProperty(
-		pPlayer, GOLD_CUMULATIVE_DEDUCTED_PROPERTY, 0)
-		+ iRemoved;
-	local iDiscrepancy = iCumulativeExpected
-		- iCumulativeDeducted - iRemainingDebt;
-
-	pPlayer:SetProperty(GOLD_CLAWBACK_DEBT_PROPERTY, iRemainingDebt);
-	pPlayer:SetProperty(GOLD_CUMULATIVE_EXPECTED_PROPERTY, iCumulativeExpected);
-	pPlayer:SetProperty(GOLD_CUMULATIVE_DEDUCTED_PROPERTY, iCumulativeDeducted);
-	pPlayer:SetProperty(GOLD_LAST_CLAWBACK_TURN_PROPERTY, iTurn);
-
-	if iTotalDue > 0 then
-		print("Rose AI: Gold-bias clawback turn " .. iTurn
-			.. " player " .. iPlayerID
-			.. " policy " .. iPolicyGold
-			.. " tier3_generic " .. iTier3GenericGold
-			.. " government_specific " .. iGovernmentSpecificGold
-			.. " belief " .. iBeliefGold
-			.. " prior_debt " .. iPriorDebt
-			.. " total_due " .. iTotalDue
-			.. " removed " .. iRemoved
-			.. " remaining_debt " .. iRemainingDebt
-			.. " balance " .. iBalanceBefore .. "->" .. iBalanceAfter);
-	end
-	if math.abs(iDiscrepancy) > 0.001 then
-		print("Rose AI ERROR: Gold-bias accounting discrepancy player "
-			.. iPlayerID .. " turn " .. iTurn
-			.. " expected " .. iCumulativeExpected
-			.. " deducted " .. iCumulativeDeducted
-			.. " debt " .. iRemainingDebt
-			.. " discrepancy " .. iDiscrepancy);
-	end
+local function AuditChoiceSignals(iPlayerID, sPhase)
+    local pPlayer = Players[iPlayerID];
+    if not IsEligibleAIPlayer(pPlayer) then return; end
+    local tPolicies = {};
+    local pCulture = pPlayer:GetCulture();
+    if pCulture ~= nil then
+        for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
+            local iPolicy = pCulture:GetSlotPolicy(iSlot);
+            local kPolicy = iPolicy ~= nil and iPolicy >= 0 and GameInfo.Policies[iPolicy] or nil;
+            if kPolicy ~= nil then
+                table.insert(tPolicies, kPolicy.PolicyType .. ":" .. tostring(pCulture:IsPolicyActive(iPolicy)));
+            end
+        end
+    end
+    table.sort(tPolicies);
+    local sGovernment = "unavailable";
+    local kBridge = ExposedMembers ~= nil and ExposedMembers.RoseAI or nil;
+    if kBridge ~= nil and kBridge.GetCurrentGovernment ~= nil then
+        local iGovernment = kBridge.GetCurrentGovernment(iPlayerID);
+        if iGovernment == -1 then
+            sGovernment = "none";
+        elseif type(iGovernment) == "number" and GameInfo.Governments[iGovernment] ~= nil then
+            sGovernment = GameInfo.Governments[iGovernment].GovernmentType;
+        end
+    end
+    local tBeliefs = {};
+    local pReligion = Game.GetReligion();
+    if pReligion ~= nil and pReligion.GetReligions ~= nil then
+        for _, kReligion in ipairs(pReligion:GetReligions()) do
+            if kReligion.Founder == iPlayerID then
+                for _, iBelief in ipairs(kReligion.Beliefs or {}) do
+                    local kBelief = GameInfo.Beliefs[iBelief];
+                    if kBelief ~= nil then table.insert(tBeliefs, kBelief.BeliefType); end
+                end
+                break;
+            end
+        end
+    end
+    table.sort(tBeliefs);
+    local pTreasury = pPlayer:GetTreasury();
+    local gold = pTreasury ~= nil and pTreasury:GetGoldBalance() or "unavailable";
+    local gpt = pTreasury ~= nil and (pTreasury:GetGoldYield() - pTreasury:GetTotalMaintenance()) or "unavailable";
+    print("Rose AI: Choice signals turn " .. Game.GetCurrentGameTurn()
+        .. " player " .. iPlayerID .. " phase " .. sPhase
+        .. " government " .. sGovernment .. " policies " .. table.concat(tPolicies, ",")
+        .. " beliefs " .. table.concat(tBeliefs, ",") .. " gold " .. tostring(gold)
+        .. " net_gpt " .. tostring(gpt) .. " clawback disabled");
 end
 
 -- Clear policies which the just-completed civic replaces before the engine's
@@ -1012,36 +640,19 @@ function OnCivicCompleted(iPlayerID, iCivicID)
 	GrantTreeFillCivics(iPlayerID);
 	-- SetCivic grants are not guaranteed to emit another completion callback.
 	ClearSlottedObsoleteReplacementPolicies(iPlayerID);
-	SyncSerfdomOffset(iPlayerID, false);
 end
 
--- Hook: fires at the start of each player's turn as a safety net.
+-- Civic/policy guards retain their previous order. Choice audits are read-only.
 function OnPlayerTurnStarted(iPlayerID)
-	-- Keep the isolated experiment independent of unrelated ledger API errors.
-	-- This touches only Serfdom's marker, not the previous source snapshot.
-	SyncSerfdomOffset(iPlayerID, true, "turn_start");
-	-- This run did not deliver AI OnPlayerTurnEnded callbacks. Refresh other
-	-- players before the next actor starts, so their latest choices are captured
-	-- before their own income rollover. Never overwrite this actor's old snapshot.
-	for iOtherID, pOther in pairs(Players) do
-		if iOtherID ~= iPlayerID and IsEligibleAIPlayer(pOther) then
-			StoreGoldBiasSnapshot(iOtherID);
-		end
-	end
-	-- Before civic changes: the ledger describes the income interval just ended.
-	-- Civic grants and policy cleanup below may change next turn's snapshot.
-	ApplyGoldBiasClawback(iPlayerID);
-	GrantReadyGovtCivics(iPlayerID);
-	GrantTreeFillCivics(iPlayerID);
-	ClearSlottedObsoleteReplacementPolicies(iPlayerID);
-	SyncSerfdomOffset(iPlayerID, false, "after_civics");
+    CleanupRetiredMarker(iPlayerID);
+    AuditChoiceSignals(iPlayerID, "turn_start");
+    GrantReadyGovtCivics(iPlayerID);
+    GrantTreeFillCivics(iPlayerID);
+    ClearSlottedObsoleteReplacementPolicies(iPlayerID);
 end
 
--- Snapshot choice-dependent sources after the AI has finished acting. The
--- next PlayerTurnStarted uses this immutable record for its Gold clawback.
 function OnPlayerTurnEnded(iPlayerID)
-	SyncSerfdomOffset(iPlayerID, true, "turn_end");
-	StoreGoldBiasSnapshot(iPlayerID);
+    AuditChoiceSignals(iPlayerID, "turn_end");
 end
 
 -- Firaxis' Nubia scenario starts scripted military operations from this hook.
@@ -1058,24 +669,10 @@ GameEvents.RoseActiveStrategyAtWar.Add(RoseActiveStrategyAtWar);
 GameEvents.RoseActiveStrategyMilitaryRecovery.Add(RoseActiveStrategyMilitaryRecovery);
 GameEvents.RoseActiveStrategyWarAdvantage.Add(RoseActiveStrategyWarAdvantage);
 
--- These gameplay hooks are demonstrated by Firaxis' Black Death and Nubia
--- scenario scripts. UI GovernmentPolicyChanged is not the gameplay hook.
-GameEvents.PolicyChanged.Add(OnSerfdomPolicyChanged);
-GameEvents.CityBuilt.Add(SyncAllSerfdomOffsets);
-GameEvents.CityConquered.Add(SyncAllSerfdomOffsets);
-GameEvents.BuildingConstructed.Add(OnSerfdomBuildingChanged);
-GameEvents.BuildingPillageStateChanged.Add(OnSerfdomBuildingChanged);
+-- Retain cleanup for captured/saved obsolete markers, including human owners.
+GameEvents.CityBuilt.Add(CleanupAllRetiredMarkers);
+GameEvents.CityConquered.Add(CleanupAllRetiredMarkers);
+CleanupAllRetiredMarkers();
 
--- Additional notifications vary by Lua context. They are optional safety nets;
--- gameplay hooks, initial reconciliation and turn boundaries stand on their own.
-for _, sEvent in ipairs({ "CapitalCityChanged", "CityRemovedFromMap",
-	"LoadComplete", "LoadScreenClose" }) do
-	if Events ~= nil and Events[sEvent] ~= nil then
-		Events[sEvent].Add(SyncAllSerfdomOffsets);
-	end
-end
-SyncAllSerfdomOffsets();
-
-print("Rose AI: Serfdom experiment mode " .. iSerfdomMode);
-
+print("Rose AI: Inactive choice signals v1; policy/government/belief Gold clawback disabled");
 print("Rose AI: Gameplay support script loaded");

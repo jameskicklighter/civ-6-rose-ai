@@ -72,49 +72,28 @@ The operation limits and requested team maxima are instructions to the Civ VI AI
 
 Rose AI gives non-human players +5 combat strength against barbarians on Prince difficulty and above, plus the civic grants described earlier.
 
-Policy, belief, and government preferences use a separate dummy-Gold system. Selected choices temporarily advertise fixed Gold-per-turn modifiers to the AI evaluator, while gameplay Lua removes the corresponding Gold from the AI treasury at the start of its next turn. Serfdom currently uses the separate building experiment described below. The other signals still inflate projected Gold-per-turn while active.
+### Inactive choice signals (experimental)
 
-- Selected policy cards advertise +20 or +40 Gold; adjacency cards require a matching district.
-- Seven highlighted religious beliefs advertise +20 Gold each to their AI religion founder.
-- Tier 2 governments advertise +40 according to religion-founder status.
-- Tier 3 governments advertise +50 generically, with another +60 for matching science, culture, or aggressive-military leader tags.
-- Tier 4 governments advertise +80.
+The former policy, government, and belief yield bonuses and treasury clawbacks have been replaced with 29 inactive scoring signals. Each uses the envoy-effect parameter `Amount=1`, gated by mutually contradictory Future Civic requirements. No new Gold, Food, Science, Faith, Culture, Production, or envoys are intended to be granted by these signals. Native effects of every source remain unchanged.
 
-Policy and belief signals use fixed player-level Gold. Government signals use a flat capital-city Gold modifier so the government chooser sees a city-scoped benefit without nominal empire-size scaling. Lua reads the configured amounts from the shared ledger and claws back that nominal total, excluding Serfdom in the experimental modes.
+An isolated Serfdom run showed useful scores of 300-464 on first selection and retained scoring after government changes with this impossible gate. The broader government/belief test is not yet runtime-validated. Amount is not a fixed score, and the old +20/+40/+50/+60/+80 Gold weights are not equivalent to these new values. Matching Tier 3 leader traits receive a separate additional signal; initial values can be tuned after collecting scores.
 
-The capital-city government signal is experimental. City-wide percentage modifiers, including the capital's amenity yield modifier, can scale its actual contribution; Civ VI exposes no reliable gameplay-Lua API for isolating that marginal amount. The clawback therefore remains exact for player-level policy and belief signals but can differ from the realized government payout by the capital's active percentage modifiers. Clawback logs expose the nominal government amount for testing.
+The configured eligibility checks are separate owner requirements; the impossible subject requirements disable gameplay effects independently:
 
-Human players receive neither these modifiers nor their Lua clawbacks.
+- Natural Philosophy, Scripture, Grand Opera, Town Charters, Naval Infrastructure, and Craftsmen require at least one owned city with a matching district meeting the game's high-adjacency check at +3. Base and unique replacements are included.
+- Five-Year Plan accepts a qualifying Campus or Industrial Zone; Economic Union accepts a qualifying Commercial Hub or Harbor. `ROSE_CHOICE_MIN_ADJACENCY` in `AI_Policies.sql` controls the threshold.
+- Serfdom and Public Works have no district gate.
+- Monarchy and Merchant Republic target non-founders; Theocracy targets religion founders.
+- Communism, Democracy, and Fascism receive generic signals plus an extra for matching science, culture, or aggressive-military leader traits. The three Tier 4 governments receive generic signals; Tier 1 is untouched.
+- Work Ethic, Jesuit Education, Choral Music, Feed the World, Zen Meditation, and Religious Community target AI belief choices. Crusade (`BELIEF_JUST_WAR`) additionally requires the aggressive-military leader trait. Belief choice does not require a religion to have already been founded.
 
-### Serfdom scoring experiments
+**Eligibility scoring still needs verification.** The native chooser demonstrably ignores the impossible subject gate for Serfdom; whether it honors the distinct owner requirements must be tested with qualified and unqualified players. SQL checks cannot prove that adjacency, founder, or personality conditions change the native score. Human owners fail the eligibility gates, and the envoy effect is blocked for everyone regardless of eligibility.
 
-`ROSE_SERFDOM_EXPERIMENT_MODE` near the top of `core/AI_Policies.sql` selects the test. The current setting is **4**, an inactive envoy-effect scoring probe. Serfdom retains its native Builder charges, but has no experimental Gold attachment, capital offset, or Serfdom Lua deduction. Other cards, beliefs, governments, and existing ledger debt are unchanged. Modes 0–3 remain available as controls.
+The general Food/Science/Gold weights in `AI_Yields.sql` and wartime strategies remain: those are AI valuation weights, not resources granted to players. The former Gold ledger is removed, so old debt properties are inert and no longer collected. The old internal Serfdom building remains registered only so gameplay Lua can remove saved copies; no new copies are created and no modifier is attached to it.
 
-Mode 4 borrows the modifier type used by RH's `ENC_POLICY_RH`, which is gated behind AI/Future Civic requirements. Rose adds an inverse Future Civic requirement to the same `TEST_ALL` set: the player must both have and lack the civic, so the envoy effect cannot activate. The hypothesis is that the AI may still score the disabled effect; this has not been demonstrated. Public Works is outside this isolated probe and retains its existing Gold/clawback behavior.
+For this full migration, restart Civ VI and start a **fresh game**. The old turn-46 save already contains other Rose policy/belief signals even though Serfdom was not yet unlocked; saved modifier instances have persisted across prior SQL changes. Marker cleanup does not guarantee removal of every serialized old yield effect.
 
-| Mode | Serfdom signal | Offset |
-| --- | --- | --- |
-| 0 | None | None (baseline) |
-| 1 | +40 Gold | None (intentional positive-only control) |
-| 2 | +40 Gold | −40 player Gold from the capital marker |
-| 3 | +40 Gold | Original next-turn treasury clawback |
-| 4 | Envoy-effect probe with an unsatisfiable requirement | None; actual envoy effect gated off |
-
-For mode 4, restart the game and replay the original pre-Feudalism turn-46 save through approximately turn 60. Check `AI_GovtPolicies.csv` for Serfdom's candidate score and selection, including Greece's government change. `Lua.log` must report mode 4 and zero Serfdom markers. Serfdom must contribute no Gold or Lua deduction. A higher score would support the hypothesis; database validation alone cannot establish scoring behavior. Do not use a save where the earlier Gold signal was already active, because saved modifier instances made previous comparisons ambiguous.
-
-In mode 2, Lua places `BUILDING_ROSE_SERFDOM_OFFSET` in the AI capital while Serfdom is both slotted and reported active. It subtracts 40 player Gold to offset the card's +40 signal. Only mode 3 includes Serfdom in Lua's clawback. Other policy snapshots require active status; old slot-only snapshots are skipped rather than treated as proof of an earned bonus.
-
-The marker is internal, has an unassigned trait to prevent normal construction, and has no maintenance or city yield. Lua reconciles policy changes, obsolescence, capital/city changes, loading, and both turn boundaries, removing stale copies before adding a new one. This is an experiment: database validity and Lua tests do not prove that the engine resolves this building's modifier to the player or preserves the policy score.
-
-To test, copy the selected SQL mode to the active mod and fully reload the game database for each run. Use separate copies of the same pre-choice save (preferably before Feudalism unlocks), then compare modes 0, 1, and 2. Ignore the first income interval when switching an existing save between accounting modes; old debt is deliberately retained. Archive logs after each run before restarting.
-
-Check `Database.log` and `Modding.log` for clean loading, then compare Serfdom scores in `AI_GovtPolicies.csv`. Mode 2 should retain mode 1's attractive score while its net GPT and passive treasury gain match mode 0. `Lua.log` lines beginning `Rose AI: Serfdom experiment` report mode, slots, marker count, treasury and net GPT (when exposed to gameplay). Other cards/governments, maintenance, trades, spending, and clawbacks must be held constant or accounted for. Verify unslotting/obsolescence removes the marker, reloading does not duplicate it, and changing or capturing the capital leaves exactly one marker for a qualifying AI and none for a human. Switch to mode 3 to restore the previous behavior; keep the marker definition installed until saved copies have been cleaned up.
-
-The first runtime test retained Serfdom's score of 294 and all eight major AIs selected it, but the Gold audit was interrupted by a gameplay-only API error: `GetCurrentGovernment()` requires the InGame UI bridge. That getter now uses the bridge; an unavailable bridge is logged and skips only the unverified government charge. Snapshots also refresh for other AIs when each player starts a turn, because this test delivered no observable AI end-turn callbacks. The current actor's previous snapshot is preserved for its income accounting.
-
-For the next test, `Serfdom offset measurement` logs once per qualifying AI per session at a turn boundary. It briefly removes and restores only the internal marker, without an income tick between, and records GPT with/without/restored plus treasury before/after. An observed `marker_delta -40`, restored GPT equal to the initial value, and unchanged treasury support correct compensation. Zero or another delta needs investigation; the logger does not assume modifier recalculation is immediate. This checks the marker's contribution, while a separate comparison against modes 0/1 is still needed to prove the full policy-plus-marker net effect.
-
-A saved-game continuation through turns 65–74 loaded the updated scripts and observed marker changes of exactly +40 on removal and −40 on addition. Ethiopia's turn-73 re-slot also showed an intervening +40 GPT rise, consistent with the positive policy signal; other cards were changing too, so that rise is not an isolated measurement of Serfdom's positive modifier. A second API error (`CityDistricts:Members()`) still blocked the generic ledger; district gates now query only the relevant district types with `HasDistrict(index, true)`, and an unavailable query skips those gates with a warning. The Serfdom audit now runs before the unrelated ledger. Logs distinguish `slotted` from `active`; the active check is a necessary guard, not proof that every native modifier attachment is correct after a government transition. A fresh continuation is still needed to verify uninterrupted bookkeeping.
+Verify clean gameplay database loading, then inspect native policy/government/belief scores and choices. `Lua.log` lines beginning `Rose AI: Choice signals` report government, slotted policies and active flags, founded beliefs, Gold balance, and net GPT without changing the treasury. Collect examples with and without good-adjacency districts and aggressive-military traits before treating the eligibility gates as proven. Archives of the previous Gold and Serfdom-only experiments remain under the workspace scratch directory.
 
 ## Compatibility
 
@@ -166,11 +145,11 @@ core/
   AI_Yields.sql                Era yield and pseudoyield preferences
   AI_Districts.sql             District priorities
   AI_Units.sql                 Builder priorities and barbarian combat bonus
-  AI_Beliefs.sql               Shared dummy-Gold ledger and belief preferences
-  AI_Policies.sql              Policy and government dummy-Gold preferences
+  AI_Beliefs.sql               Shared choice-signal registry and belief preferences
+  AI_Policies.sql              Conditional inactive choice-signal modifiers
   AI_BehaviorTreeOps.sql        Operation roles and concurrency limits
   AI_BehaviorTrees.xml          Operation-team and behavior-tree tuning
-  Rose_AI_Gameplay.lua         Civic grants, Gold clawback, war and naval logic
+  Rose_AI_Gameplay.lua         Civic grants, choice audits, war and naval logic
   Rose_AI_InGame.lua/.xml      Military-strength bridge
 ```
 

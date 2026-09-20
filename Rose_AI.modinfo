@@ -35,6 +35,7 @@
     </AddUserInterfaces>
 
     <AddGameplayScripts id="ROSE_AI_SCRIPTS">
+      <File>core/Rose_AI_ChoiceMarkers.lua</File>
       <File>core/Rose_AI_Gameplay.lua</File>
     </AddGameplayScripts>
 
@@ -52,6 +53,7 @@
     <File>core/AI_BehaviorTreeOps.sql</File>
     <File>core/AI_BehaviorTrees.xml</File>
     <File>core/Rose_AI_Gameplay.lua</File>
+    <File>core/Rose_AI_ChoiceMarkers.lua</File>
     <File>core/Rose_AI_InGame.lua</File>
     <File>core/Rose_AI_InGame.xml</File>
   </Files>

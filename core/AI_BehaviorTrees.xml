@@ -295,6 +295,7 @@ Not applied here:
     <Row DefnId="0" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="8" />
     <Row DefnId="1" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Finish cleanly after success. -->
     <Row DefnId="2" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="true" /> <!-- Eight-turn minimum window. -->
+    <Row DefnId="0" NodeId="7" TreeName="Naval Superiority Tree" DefaultData="1" /> <!-- Tolerate one failed sibling, normally Naval Patrol. -->
     <Row DefnId="0" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="true" /> <!-- Ongoing recruitment phase. -->
     <Row DefnId="2" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="6" />
     <Row DefnId="3" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="false" /> <!-- Existing ships only. -->

@@ -1,7 +1,5 @@
--- Rose AI InGame UI bridge.
--- GetMilitaryStrengthWithoutTreasury is exposed only in the InGame UI
--- context. Publish the value through ExposedMembers so the gameplay strategy
--- callbacks can compare the armies of major civilizations at war.
+-- Rose AI InGame UI bridge for military strength.
+-- This getter is unavailable in the gameplay context.
 
 print("Rose_AI_InGame: Rose AI: Loading InGame military-strength bridge");
 

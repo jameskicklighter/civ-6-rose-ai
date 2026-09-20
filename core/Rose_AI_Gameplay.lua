@@ -17,6 +17,10 @@
 -- 4. Special operations:
 --    - Any AI major can launch a small, cooldown-controlled naval interception
 --      when an uncommitted melee ship is near an at-war enemy combat ship.
+--
+-- 5. Policy replacement guard: clear an AI's slotted predecessor policy as
+--    soon as a newly completed civic unlocks its replacement. This avoids the
+--    delayed-obsolescence rollover path that can suppress all policy effects.
 -- ============================================================================
 
 print("Rose AI: Loading gameplay support script");
@@ -36,6 +40,34 @@ for kUnitAiInfo in GameInfo.UnitAiInfos() do
 		tUnitAiTypes[kUnitAiInfo.UnitType] = tTypes;
 	end
 	tTypes[kUnitAiInfo.AiType] = true;
+end
+
+-- Cache policy predecessors by the civic which unlocks their replacement.
+-- ObsoletePolicies is data-driven, so this also covers DLC policy chains.
+local tPolicyReplacementsByCivic = {};
+local tReplacementPolicyTypes = {};
+for kObsoleteInfo in GameInfo.ObsoletePolicies() do
+	if kObsoleteInfo.ObsoletePolicy ~= nil then
+		local kOldPolicy = GameInfo.Policies[kObsoleteInfo.PolicyType];
+		local kNewPolicy = GameInfo.Policies[kObsoleteInfo.ObsoletePolicy];
+		if kOldPolicy ~= nil and kNewPolicy ~= nil then
+			tReplacementPolicyTypes[kOldPolicy.PolicyType] = true;
+			if kNewPolicy.PrereqCivic ~= nil then
+				local kCivic = GameInfo.Civics[kNewPolicy.PrereqCivic];
+				if kCivic ~= nil then
+					local tReplacements = tPolicyReplacementsByCivic[kCivic.Index];
+					if tReplacements == nil then
+						tReplacements = {};
+						tPolicyReplacementsByCivic[kCivic.Index] = tReplacements;
+					end
+					tReplacements[kOldPolicy.Index] = {
+						oldPolicyType = kOldPolicy.PolicyType,
+						newPolicyType = kNewPolicy.PolicyType,
+					};
+				end
+			end
+		end
+	end
 end
 
 -- ============================================================================
@@ -160,6 +192,77 @@ local function IsEligibleAIPlayer(pPlayer)
 		and pPlayer:IsAlive()
 		and pPlayer:IsMajor()
 		and not pPlayer:IsHuman();
+end
+
+-- Clear policies which the just-completed civic replaces before the engine's
+-- delayed rollover cleanup can remove them from an otherwise committed deck.
+-- This deliberately does not force the replacement card; native CultureAI is
+-- left to fill every newly open slot.
+local function ClearPoliciesReplacedByCivic(iPlayerID, iCivicID)
+	local tReplacements = tPolicyReplacementsByCivic[iCivicID];
+	if tReplacements == nil then return false; end
+
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return false; end
+
+	local pCulture = pPlayer:GetCulture();
+	if pCulture == nil then return false; end
+
+	local bClearedAny = false;
+	for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
+		local iPolicy = pCulture:GetSlotPolicy(iSlot);
+		local kReplacement = tReplacements[iPolicy];
+		if kReplacement ~= nil then
+			pCulture:ClearPolicySlot(iSlot);
+			bClearedAny = true;
+			print("Rose AI: Cleared replaced policy "
+				.. kReplacement.oldPolicyType
+				.. " from slot " .. iSlot
+				.. " for AI player " .. iPlayerID
+				.. " when replacement " .. kReplacement.newPolicyType
+				.. " unlocked");
+		end
+	end
+
+	if bClearedAny then
+		-- Preserve the normal free policy-change state for this civic. This flag
+		-- does not choose a card; an open slot still has to be filled by CultureAI.
+		pCulture:SetCivicCompletedThisTurn(true);
+	end
+	return bClearedAny;
+end
+
+-- Safety net for a replacement policy which reached the next AI turn while
+-- its obsolete predecessor still occupies a slot. Great-Person-only expiry is
+-- intentionally left to the base game because it is unrelated to this bug.
+local function ClearSlottedObsoleteReplacementPolicies(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return false; end
+
+	local pCulture = pPlayer:GetCulture();
+	if pCulture == nil then return false; end
+
+	local bClearedAny = false;
+	for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
+		local iPolicy = pCulture:GetSlotPolicy(iSlot);
+		local kPolicy = iPolicy ~= nil and iPolicy >= 0
+			and GameInfo.Policies[iPolicy] or nil;
+		if kPolicy ~= nil
+			and tReplacementPolicyTypes[kPolicy.PolicyType] == true
+			and pCulture:IsPolicyObsolete(kPolicy.Hash) then
+			pCulture:ClearPolicySlot(iSlot);
+			bClearedAny = true;
+			print("Rose AI: Cleared stale obsolete replacement policy "
+				.. kPolicy.PolicyType
+				.. " from slot " .. iSlot
+				.. " for AI player " .. iPlayerID);
+		end
+	end
+
+	if bClearedAny then
+		pCulture:SetCivicCompletedThisTurn(true);
+	end
+	return bClearedAny;
 end
 
 -- ============================================================================
@@ -446,14 +549,18 @@ end
 
 -- Hook: fires whenever any player completes a civic (gameplay event).
 function OnCivicCompleted(iPlayerID, iCivicID)
+	ClearPoliciesReplacedByCivic(iPlayerID, iCivicID);
 	GrantReadyGovtCivics(iPlayerID);
 	GrantTreeFillCivics(iPlayerID);
+	-- SetCivic grants are not guaranteed to emit another completion callback.
+	ClearSlottedObsoleteReplacementPolicies(iPlayerID);
 end
 
--- Hook: fires at the start of each player's turn as a safety net.
+-- Grant ready civics, then reconcile policies made obsolete by the grants.
 function OnPlayerTurnStarted(iPlayerID)
-	GrantReadyGovtCivics(iPlayerID);
-	GrantTreeFillCivics(iPlayerID);
+    GrantReadyGovtCivics(iPlayerID);
+    GrantTreeFillCivics(iPlayerID);
+    ClearSlottedObsoleteReplacementPolicies(iPlayerID);
 end
 
 -- Firaxis' Nubia scenario starts scripted military operations from this hook.

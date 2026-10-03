@@ -11,8 +11,9 @@
 --
 -- Grants cascade: granting one civic may satisfy another's prereqs.
 --
--- 3. Dynamic war strategies: Lua conditions activate wartime replacement,
---    weak-army recovery, and strength-gated peace resistance database lists.
+-- 3. Dynamic war strategies: Forbidden Lua conditions control wartime
+--    replacement, weak-army recovery, and strength-gated peace resistance
+--    database lists.
 --
 -- 4. Special operations:
 --    - Any AI major can launch a small, cooldown-controlled naval interception
@@ -24,6 +25,22 @@
 -- ============================================================================
 
 print("Rose AI: Loading gameplay support script");
+
+-- War strategies use Forbidden Lua conditions with no positive condition, so
+-- an unanswered check could leave them allowed. Register the callbacks first:
+-- until the implementations below have loaded, each one forbids its strategy.
+-- A load error anywhere later in this file therefore keeps them off.
+local tForbidStrategy = {};
+local function RegisterForbidCallback(sName)
+	GameEvents[sName].Add(function(iPlayerID, iThreshold)
+		local fnForbid = tForbidStrategy[sName];
+		if fnForbid == nil then return true; end
+		return fnForbid(iPlayerID, iThreshold);
+	end);
+end
+RegisterForbidCallback("RoseForbidStrategyAtWar");
+RegisterForbidCallback("RoseForbidStrategyMilitaryRecovery");
+RegisterForbidCallback("RoseForbidStrategyWarAdvantage");
 
 local NAVAL_SUPERIORITY_SUCCESS_COOLDOWN = 12;
 local NAVAL_SUPERIORITY_FAILURE_RETRY = 4;
@@ -348,14 +365,79 @@ function RoseActiveStrategyAtWar(iPlayerID, iThreshold)
 	return bActive;
 end
 
+-- Strength readings fluctuate by several percent from turn to turn. A Forbidden
+-- condition ends a strategy at once and the engine then blocks re-adoption for
+-- 20 turns, so a one-turn dip across the entry threshold must not release it.
+-- Each strength strategy therefore enters at its threshold and releases at a
+-- looser band. The bands do not overlap (85 < 110), so Recovery and Advantage
+-- can never both be active.
+--
+-- The latch is a player property, saved with the game and identical on every
+-- multiplayer machine, including after a rejoin. It is written only from the
+-- synchronized PlayerTurnStarted hook; the strategy condition callbacks only
+-- read it. An invalid strength reading (for example before the InGame bridge
+-- has loaded after a reload) leaves the latch unchanged. The entry values
+-- match the ThresholdValue columns in AI_Strategies.sql (70 and 125).
+local RECOVERY_ENTER_PERCENT = 70;
+local RECOVERY_RELEASE_PERCENT = 85;
+local ADVANTAGE_ENTER_PERCENT = 125;
+local ADVANTAGE_RELEASE_PERCENT = 110;
+local RECOVERY_LATCH = "ROSE_MILITARY_RECOVERY_LATCH";
+local ADVANTAGE_LATCH = "ROSE_WAR_ADVANTAGE_LATCH";
+
+local function SetLatch(pPlayer, sProperty, bActive)
+	local bWasActive = pPlayer:GetProperty(sProperty) == 1;
+	if bActive ~= bWasActive then
+		pPlayer:SetProperty(sProperty, bActive and 1 or 0);
+	end
+end
+
+local function UpdateLatch(pPlayer, sProperty, bEnter, bHold)
+	local bWasActive = pPlayer:GetProperty(sProperty) == 1;
+	SetLatch(pPlayer, sProperty, bEnter or (bWasActive and bHold));
+end
+
+local function UpdateWarStrategyLatches(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if pPlayer == nil then return; end
+	if not IsEligibleAIPlayer(pPlayer) then
+		-- Clear any latch left from a period when this slot was an eligible AI.
+		SetLatch(pPlayer, RECOVERY_LATCH, false);
+		SetLatch(pPlayer, ADVANTAGE_LATCH, false);
+		return;
+	end
+	local iWars, iOurStrength, iEnemyStrength, bStrengthValid =
+		GetMajorWarContext(iPlayerID);
+	if iWars == 0 then
+		SetLatch(pPlayer, RECOVERY_LATCH, false);
+		SetLatch(pPlayer, ADVANTAGE_LATCH, false);
+		return;
+	end
+	if not bStrengthValid then return; end
+	if iEnemyStrength <= 0 then
+		-- Opposing armies are gone: not weaker. Advantage keeps its state
+		-- because a ratio cannot be computed.
+		SetLatch(pPlayer, RECOVERY_LATCH, false);
+		return;
+	end
+	local iOurScaled = iOurStrength * 100;
+	UpdateLatch(pPlayer, RECOVERY_LATCH,
+		iOurScaled < iEnemyStrength * RECOVERY_ENTER_PERCENT,
+		iOurScaled < iEnemyStrength * RECOVERY_RELEASE_PERCENT);
+	UpdateLatch(pPlayer, ADVANTAGE_LATCH,
+		iOurScaled >= iEnemyStrength * ADVANTAGE_ENTER_PERCENT,
+		iOurScaled >= iEnemyStrength * ADVANTAGE_RELEASE_PERCENT);
+end
+
+local function IsLatched(iPlayerID, sProperty)
+	local pPlayer = Players[iPlayerID];
+	return pPlayer ~= nil and pPlayer:GetProperty(sProperty) == 1;
+end
+
 function RoseActiveStrategyMilitaryRecovery(iPlayerID, iThreshold)
 	local iWars, iOurStrength, iEnemyStrength, bStrengthValid =
 		GetMajorWarContext(iPlayerID);
-	local iRecoveryThreshold = iThreshold or 70;
-	local bActive = iWars > 0
-		and bStrengthValid
-		and iEnemyStrength > 0
-		and iOurStrength * 100 < iEnemyStrength * iRecoveryThreshold;
+	local bActive = iWars > 0 and IsLatched(iPlayerID, RECOVERY_LATCH);
 	LogWarStrategyChange(iPlayerID, "MILITARY_RECOVERY", bActive,
 		iWars, iOurStrength, iEnemyStrength, bStrengthValid);
 	return bActive;
@@ -364,14 +446,35 @@ end
 function RoseActiveStrategyWarAdvantage(iPlayerID, iThreshold)
 	local iWars, iOurStrength, iEnemyStrength, bStrengthValid =
 		GetMajorWarContext(iPlayerID);
-	local iAdvantageThreshold = iThreshold or 125;
-	local bActive = iWars > 0
-		and bStrengthValid
-		and iEnemyStrength > 0
-		and iOurStrength * 100 >= iEnemyStrength * iAdvantageThreshold;
+	local bActive = iWars > 0 and IsLatched(iPlayerID, ADVANTAGE_LATCH);
 	LogWarStrategyChange(iPlayerID, "WAR_ADVANTAGE", bActive,
 		iWars, iOurStrength, iEnemyStrength, bStrengthValid);
 	return bActive;
+end
+
+-- The SQL conditions are Forbidden rows, so these callbacks answer "block this
+-- strategy now?". A Forbidden condition ends the engine's 20-turn minimum hold
+-- on the next evaluation. With no positive condition, an unanswered or failed
+-- check would leave the strategy allowed, so any error forbids instead.
+local function ForbidUnlessActive(fnActive, iPlayerID, iThreshold)
+	local bOk, bActive = pcall(fnActive, iPlayerID, iThreshold);
+	if not bOk then
+		print("Rose AI ERROR: War strategy check failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(bActive));
+		return true;
+	end
+	return bActive ~= true;
+end
+
+-- Filled in only after everything above has loaded; see RegisterForbidCallback.
+tForbidStrategy.RoseForbidStrategyAtWar = function(iPlayerID, iThreshold)
+	return ForbidUnlessActive(RoseActiveStrategyAtWar, iPlayerID, iThreshold);
+end
+tForbidStrategy.RoseForbidStrategyMilitaryRecovery = function(iPlayerID, iThreshold)
+	return ForbidUnlessActive(RoseActiveStrategyMilitaryRecovery, iPlayerID, iThreshold);
+end
+tForbidStrategy.RoseForbidStrategyWarAdvantage = function(iPlayerID, iThreshold)
+	return ForbidUnlessActive(RoseActiveStrategyWarAdvantage, iPlayerID, iThreshold);
 end
 
 local function GetAliveCityOwners()
@@ -558,6 +661,11 @@ end
 
 -- Grant ready civics, then reconcile policies made obsolete by the grants.
 function OnPlayerTurnStarted(iPlayerID)
+    local bOk, sError = pcall(UpdateWarStrategyLatches, iPlayerID);
+    if not bOk then
+        print("Rose AI ERROR: War strategy latch update failed player "
+            .. tostring(iPlayerID) .. ": " .. tostring(sError));
+    end
     GrantReadyGovtCivics(iPlayerID);
     GrantTreeFillCivics(iPlayerID);
     ClearSlottedObsoleteReplacementPolicies(iPlayerID);
@@ -572,8 +680,5 @@ end
 GameEvents.OnCivicCulturevated.Add(OnCivicCompleted);
 GameEvents.PlayerTurnStarted.Add(OnPlayerTurnStarted);
 GameEvents.PlayerTurnStartComplete.Add(OnPlayerTurnStartComplete);
-GameEvents.RoseActiveStrategyAtWar.Add(RoseActiveStrategyAtWar);
-GameEvents.RoseActiveStrategyMilitaryRecovery.Add(RoseActiveStrategyMilitaryRecovery);
-GameEvents.RoseActiveStrategyWarAdvantage.Add(RoseActiveStrategyWarAdvantage);
 
 print("Rose AI: Gameplay support script loaded");

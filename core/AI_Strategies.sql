@@ -26,8 +26,8 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction) VALUE
 -- ============================================================================
 -- 2. DYNAMIC WAR SUSTAINMENT
 --
--- These strategies are activated by Call Lua Function conditions implemented
--- in Rose_AI_Gameplay.lua. They respond only to wars against other major
+-- These strategies are controlled by Forbidden Call Lua Function conditions
+-- implemented in Rose_AI_Gameplay.lua. They respond only to wars against other major
 -- civilizations; city-state wars do not redirect the entire economy.
 --
 -- At War maintains unit replacement and deemphasizes optional infrastructure.
@@ -42,10 +42,16 @@ INSERT OR IGNORE INTO Types (Type, Kind) VALUES
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'KIND_VICTORY_STRATEGY'),
 ('STRATEGY_ROSE_WAR_ADVANTAGE',      'KIND_VICTORY_STRATEGY');
 
+-- The engine keeps an adopted strategy for at least 20 turns unless a
+-- Forbidden condition becomes true. Each strategy therefore needs no positive
+-- condition and is blocked by one Forbidden Lua check whenever it should be
+-- inactive, so it ends the turn after its war/strength state ends. A strategy
+-- that stops still cannot be re-adopted for 20 turns (engine cooldown).
+-- Verified with .scratch/strategy-probe (2026-09-26 test, probe B).
 INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
-('STRATEGY_ROSE_AT_WAR',            1),
-('STRATEGY_ROSE_MILITARY_RECOVERY', 1),
-('STRATEGY_ROSE_WAR_ADVANTAGE',     1);
+('STRATEGY_ROSE_AT_WAR',            0),
+('STRATEGY_ROSE_MILITARY_RECOVERY', 0),
+('STRATEGY_ROSE_WAR_ADVANTAGE',     0);
 
 INSERT OR IGNORE INTO StrategyConditions
     (StrategyType, ConditionFunction, Disqualifier) VALUES
@@ -53,11 +59,13 @@ INSERT OR IGNORE INTO StrategyConditions
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'Is Not Major', 1),
 ('STRATEGY_ROSE_WAR_ADVANTAGE',     'Is Not Major', 1);
 
+-- ThresholdValue is documentation only: the entry/release percentages are Lua
+-- constants in Rose_AI_Gameplay.lua (70/85 and 125/110). Change them there.
 INSERT OR IGNORE INTO StrategyConditions
-    (StrategyType, ConditionFunction, StringValue, ThresholdValue) VALUES
-('STRATEGY_ROSE_AT_WAR',            'Call Lua Function', 'RoseActiveStrategyAtWar',            0),
-('STRATEGY_ROSE_MILITARY_RECOVERY', 'Call Lua Function', 'RoseActiveStrategyMilitaryRecovery', 70),
-('STRATEGY_ROSE_WAR_ADVANTAGE',     'Call Lua Function', 'RoseActiveStrategyWarAdvantage',     125);
+    (StrategyType, ConditionFunction, StringValue, ThresholdValue, Forbidden) VALUES
+('STRATEGY_ROSE_AT_WAR',            'Call Lua Function', 'RoseForbidStrategyAtWar',            0,   1),
+('STRATEGY_ROSE_MILITARY_RECOVERY', 'Call Lua Function', 'RoseForbidStrategyMilitaryRecovery', 70,  1),
+('STRATEGY_ROSE_WAR_ADVANTAGE',     'Call Lua Function', 'RoseForbidStrategyWarAdvantage',     125, 1);
 
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseAtWarYields'),

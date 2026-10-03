@@ -100,17 +100,13 @@ end
 
 -- These gameplay hooks are used by Firaxis scenario scripts. Reconciliation
 -- also runs after loading, before AI choices on the next player's turn.
+-- Only synchronized GameEvents mutate markers. UI-side Events (war, peace,
+-- city transfer) are not used: they are delivered locally on each machine, so
+-- building changes made from them could land at different times in multiplayer.
+-- The next player's turn-start hook picks up those changes instead.
 GameEvents.PlayerTurnStarted.Add(ReconcileMarkers);
 GameEvents.PlayerTurnStartComplete.Add(ReconcileMarkers);
 GameEvents.CityBuilt.Add(ReconcileMarkers);
 GameEvents.CityConquered.Add(ReconcileMarkers);
-
--- These Events are used by Firaxis UI scripts. Listen when exposed here, but
--- retain turn hooks because availability in the gameplay context is unverified.
-if Events ~= nil then
-    if Events.CityTransfered ~= nil then Events.CityTransfered.Add(ReconcileMarkers); end
-    if Events.DiplomacyDeclareWar ~= nil then Events.DiplomacyDeclareWar.Add(ReconcileMarkers); end
-    if Events.DiplomacyMakePeace ~= nil then Events.DiplomacyMakePeace.Add(ReconcileMarkers); end
-end
 
 print("Rose AI: Military and war choice marker helper loaded");

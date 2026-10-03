@@ -24,15 +24,49 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction) VALUE
 ('STRATEGY_INFORMATION_CHANGES', 'Is Information');
 
 -- ============================================================================
+-- 1b. CUMULATIVE "ERA OR LATER" STRATEGIES
+-- An era condition with ThresholdValue 1 means "this era or later" (base Science
+-- Victory uses 'Is Renaissance' this way; RH uses the same form). Once adopted
+-- these never end, so their lists add up as eras pass. Per-era strategies stay
+-- active up to 20 turns after adoption, so they may overlap the start of the
+-- next era; lists that must not stack (AI_Yields.sql section 7) use these.
+-- ============================================================================
+
+INSERT OR IGNORE INTO Types (Type, Kind) VALUES
+('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_INDUSTRIAL_ONWARD',  'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_MODERN_ONWARD',      'KIND_VICTORY_STRATEGY');
+
+INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
+('STRATEGY_ROSE_RENAISSANCE_ONWARD', 1),
+('STRATEGY_ROSE_INDUSTRIAL_ONWARD',  1),
+('STRATEGY_ROSE_MODERN_ONWARD',      1);
+
+INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, Disqualifier) VALUES
+('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'Is Not Major', 1),
+('STRATEGY_ROSE_INDUSTRIAL_ONWARD',  'Is Not Major', 1),
+('STRATEGY_ROSE_MODERN_ONWARD',      'Is Not Major', 1);
+
+INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, ThresholdValue) VALUES
+('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'Is Renaissance', 1),
+('STRATEGY_ROSE_INDUSTRIAL_ONWARD',  'Is Industrial',  1),
+('STRATEGY_ROSE_MODERN_ONWARD',      'Is Modern',      1);
+
+-- ============================================================================
 -- 2. DYNAMIC WAR SUSTAINMENT
 --
 -- These strategies are controlled by Forbidden Call Lua Function conditions
 -- implemented in Rose_AI_Gameplay.lua. They respond only to wars against other major
 -- civilizations; city-state wars do not redirect the entire economy.
 --
--- At War maintains unit replacement and deemphasizes optional infrastructure.
+-- At War maintains unit replacement, deemphasizes optional infrastructure, and
+-- adds one city-assault slot. The base allowance is one slot plus one per war,
+-- and planned attacks on city-states could hold both while the real war enemy
+-- went unattacked (Phoenicia, 2026-10-03 multiplayer log).
 -- Military Recovery stacks when our military is below 70% of the combined
--- opposing strength, trading one assault slot for defense and reconstruction.
+-- opposing strength and removes one assault slot in exchange for defense. With
+-- At War active that cancels its extra slot; if At War is in its 20-turn
+-- restart cooldown, the AI keeps one slot per war rather than dropping to zero.
 -- War Advantage suppresses voluntary peace only while our military is at
 -- least 125% of the combined opposing strength.
 -- ============================================================================
@@ -68,6 +102,7 @@ INSERT OR IGNORE INTO StrategyConditions
 ('STRATEGY_ROSE_WAR_ADVANTAGE',     'Call Lua Function', 'RoseForbidStrategyWarAdvantage',     125, 1);
 
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseAtWarOperations'),
 ('RoseAtWarYields'),
 ('RoseAtWarPseudoYields'),
 ('RoseMilitaryRecoveryOperations'),
@@ -76,6 +111,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseWarAdvantageDiplomacy');
 
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseAtWarOperations',                'AiOperationTypes'),
 ('RoseAtWarYields',                    'Yields'),
 ('RoseAtWarPseudoYields',              'PseudoYields'),
 ('RoseMilitaryRecoveryOperations',     'AiOperationTypes'),
@@ -84,6 +120,7 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseWarAdvantageDiplomacy',          'DiplomaticActions');
 
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_AT_WAR',            'RoseAtWarOperations'),
 ('STRATEGY_ROSE_AT_WAR',            'RoseAtWarYields'),
 ('STRATEGY_ROSE_AT_WAR',            'RoseAtWarPseudoYields'),
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryOperations'),
@@ -93,7 +130,9 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 
 INSERT OR REPLACE INTO AiFavoredItems
     (ListType, Item, Favored, Value) VALUES
--- Sustained wartime production and replacement without adding assault slots.
+-- Sustained wartime production and replacement, plus one assault slot so the
+-- war enemy can be attacked even when planned attacks hold the base slots.
+('RoseAtWarOperations',   'CITY_ASSAULT',                        1,   1),
 ('RoseAtWarYields',       'YIELD_PRODUCTION',                    1,  10),
 ('RoseAtWarYields',       'YIELD_GOLD',                          1,  10),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_UNIT_COMBAT',             1,  20),

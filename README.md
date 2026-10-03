@@ -38,18 +38,20 @@ These grants apply only to non-human major civilizations. Rose AI does not rewri
 
 Rose AI adds three strategies for wars against other major civilizations:
 
-- **At War** favors Production, Gold, combat units, naval units, and army replacement while temporarily reducing optional district, improvement, and wonder demand.
-- **Military Recovery** stacks when the AI's military strength is below 70% of the combined opposing major armies. It adds defensive capacity, reduces one city-assault slot, and places a stronger emphasis on rebuilding.
+- **At War** favors Production, Gold, combat units, naval units, and army replacement while temporarily reducing optional district, improvement, and wonder demand. It also allows one extra city-assault operation, so planned attacks elsewhere cannot crowd out the actual war.
+- **Military Recovery** stacks when the AI's military strength is below 70% of the combined opposing major armies. It adds defensive capacity, gives up one city-assault slot, and places a stronger emphasis on rebuilding.
 - **War Advantage** discourages voluntary peace while the AI is at least 125% as strong as the combined opposing major armies.
 
 The strength checks use an InGame UI bridge to read the engine's military-strength value. They fail closed when that value is unavailable, so the strength-gated recovery and advantage modes are not activated from incomplete data.
 
 ### Military operations and behavior trees
 
-- Walled-city assaults require an actual bombard siege unit and may use a limited number of bombers.
+- Walled-city assaults require one unit that can damage walls: a bombard siege unit or, from the Modern era, a bomber. They may use a limited number of extra bombers.
 - City-defense operations avoid consuming bombard siege units needed by assaults.
 - City-assault production contracts exclude faith-only and otherwise untrainable units, preventing impossible Warrior Monk contracts.
-- City-assault strength thresholds, recruitment ranges, phase limits, target distances, and operation concurrency are tuned to reduce premature attacks and army fragmentation.
+- City-assault strength thresholds, recruitment ranges, phase limits, and operation concurrency are tuned to reduce premature attacks and stalled sieges.
+- Walled-city attacks can reach farther targets (16 tiles when planned, 22 during a war), so mid- and late-game wars reach the enemy's cities instead of nearby city-states.
+- From the Renaissance, well-defended cities count as more worthwhile targets, and from the Industrial era the AI keeps a larger standing army. The early eras are unchanged.
 - Settlement operations are limited to one at a time and retain a combat escort without recruiting siege or bomber roles.
 - The Simple City Defense tree is replaced with a focused version.
 - Naval Superiority is a small, Lua-started interception against a visible enemy combat ship within 12 tiles. It uses nearby existing ships, cannot create or steal units, and keeps a patrol fallback active while the target is reacquired.

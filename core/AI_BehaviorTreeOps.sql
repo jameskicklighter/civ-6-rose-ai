@@ -2,21 +2,28 @@
 
 -- Rebuild the derived trainable city-assault roles.
 DELETE FROM OpTeamRequirements
-WHERE AiType IN ('UNITTYPE_ROSE_CONTRACT_COMBAT', 'UNITTYPE_ROSE_CONTRACT_MELEE');
+WHERE AiType IN (
+    'UNITTYPE_ROSE_CONTRACT_COMBAT',
+    'UNITTYPE_ROSE_CONTRACT_MELEE',
+    'UNITTYPE_ROSE_SIEGE_STRIKE'
+);
 DELETE FROM UnitAiInfos
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
-    'UNITTYPE_ROSE_CONTRACT_MELEE'
+    'UNITTYPE_ROSE_CONTRACT_MELEE',
+    'UNITTYPE_ROSE_SIEGE_STRIKE'
 );
 DELETE FROM UnitAiTypes
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
-    'UNITTYPE_ROSE_CONTRACT_MELEE'
+    'UNITTYPE_ROSE_CONTRACT_MELEE',
+    'UNITTYPE_ROSE_SIEGE_STRIKE'
 );
 
 INSERT OR IGNORE INTO UnitAiTypes (AiType) VALUES
 ('UNITTYPE_ROSE_CONTRACT_COMBAT'),
-('UNITTYPE_ROSE_CONTRACT_MELEE');
+('UNITTYPE_ROSE_CONTRACT_MELEE'),
+('UNITTYPE_ROSE_SIEGE_STRIKE');
 
 -- Normal city assaults were repeatedly issuing impossible production
 -- contracts for the faith-only Warrior Monk. Derive trainable combat/melee
@@ -44,6 +51,21 @@ WHERE Info.AiType = 'UNITTYPE_MELEE'
   AND Unit.MustPurchase = 0
   AND Unit.EnabledByReligion = 0
   AND Unit.UnitType <> 'UNIT_WARRIOR_MONK';
+
+-- Walled-city assaults need one unit that can damage walls. Bombers can do this
+-- in the Modern era and later; the base Siege City Assault tree already has
+-- air-assault nodes for them. This derived role (ground siege plus bombers) is
+-- the team's mandatory minimum; see AI_BehaviorTrees.xml. Bombers are not added
+-- to UNITTYPE_SIEGE itself (RH's approach), so City Defense, the settle escort
+-- and the unwalled Simple City Attack Force keep their current unit pools.
+INSERT OR IGNORE INTO UnitAiInfos (UnitType, AiType)
+SELECT DISTINCT Info.UnitType, 'UNITTYPE_ROSE_SIEGE_STRIKE'
+FROM UnitAiInfos AS Info
+JOIN Units AS Unit ON Unit.UnitType = Info.UnitType
+WHERE Info.AiType IN ('UNITTYPE_SIEGE', 'UNITTYPE_AIR_SIEGE')
+  AND Unit.CanTrain = 1
+  AND Unit.MustPurchase = 0
+  AND Unit.EnabledByReligion = 0;
 
 DELETE FROM OpTeamRequirements
 WHERE TeamName IN ('Simple City Attack Force', 'City Attack Force')

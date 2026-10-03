@@ -18,7 +18,7 @@ Applied here:
 - Replacement Siege City Assault tree: about 15-turn limit on initial assembly.
 - Naval Superiority team exclusions for non-naval unit categories.
 - Lower city-assault strength ratios so assembled armies can proceed.
-- Actual siege-unit requirement for walled-city attacks.
+- Siege-unit (or, late, bomber) requirement for walled-city attacks.
 - Settlement escort limits that reserve siege units for military operations.
 - Small data tuning for Simple Operation Attack and Early City Assault.
 
@@ -82,16 +82,22 @@ Not applied here:
 
   <OpTeamRequirements>
     <!--
-    Walled-city attacks require one actual bombard-capable siege unit.
+    Walled-city attacks require one unit that can damage walls: a trainable
+    bombard-capable siege unit or, from the Modern era, a bomber
+    (UNITTYPE_ROSE_SIEGE_STRIKE, derived in AI_BehaviorTreeOps.sql), so late
+    walled attacks need not wait for a ground siege unit. The role has no
+    maximum of its own: UNITTYPE_SIEGE (max 3) and UNITTYPE_AIR_SIEGE (max 2)
+    still cap ground siege and bombers separately.
     UNITTYPE_SIEGE_ALL is broader and also includes rams, towers, anti-air,
-    Mobile SAMs, and the Giant Death Robot, so it is no longer the minimum.
-    The two tags overlap: one Catapult satisfies both classifications, but the
-    UNITTYPE_SIEGE row is what guarantees an actual bombard unit.
+    Mobile SAMs, and the Giant Death Robot, so it is not the minimum. The tags
+    overlap: one Catapult satisfies all three, and one Bomber satisfies the
+    strike role and AIR_SIEGE.
     -->
     <Update>
       <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE" />
-      <Set MinNumber="1" MaxNumber="3" />
+      <Set MinNumber="0" MaxNumber="3" />
     </Update>
+    <Replace TeamName="City Attack Force" AiType="UNITTYPE_ROSE_SIEGE_STRIKE" MinNumber="1" />
     <Update>
       <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE_ALL" />
       <Set MinNumber="0" />
@@ -150,16 +156,24 @@ Not applied here:
     </Update>
 
     <!--
-    Keep walled-city assaults local so one AI does not split its army and
-    production contracts among several distant sieges at the same time.
+    Walled-city reach. From about turn 75 almost every city target is walled,
+    so these limits govern nearly all mid/late attacks (unwalled attacks keep
+    the base 30/45). The earlier 8/10 cap kept armies local but left real war
+    enemies out of range: Phoenicia never targeted Byzantium's Thessalonica,
+    about 10 tiles away, during a 22-turn war (2026-10-03 log). Area and world
+    limits follow RH (planned 16/15, wartime 22/21) except the planned
+    cross-area limit, which stays near Rose's previous 10 (base 0) because
+    planned overseas sieges rarely succeed. Rose sets the region limit equal
+    to the area limit; base and RH leave region at -1.
+    Base: planned 30 in-area / 0 world; wartime 45 / unlimited.
     -->
     <Update>
       <Where OperationName="Attack Walled City" />
-      <Set MaxTargetDistInRegion="8" MaxTargetDistInArea="8" MaxTargetDistInWorld="10" />
+      <Set MaxTargetDistInRegion="16" MaxTargetDistInArea="16" MaxTargetDistInWorld="12" />
     </Update>
     <Update>
       <Where OperationName="Wartime Attack Walled City" />
-      <Set MaxTargetDistInRegion="8" MaxTargetDistInArea="8" MaxTargetDistInWorld="10" />
+      <Set MaxTargetDistInRegion="22" MaxTargetDistInArea="22" MaxTargetDistInWorld="21" />
     </Update>
   </AiOperationDefs>
 

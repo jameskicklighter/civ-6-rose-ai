@@ -322,26 +322,44 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- friendship, trade, peace, and city-state-war preferences untouched. It is an
 -- AI preference, not a visible unconditional opinion modifier, and stacks with
 -- the military-victory strategy's existing -50 only while that strategy runs.
+--
+-- Standing army in every era, at peace too, so a military leader has an army
+-- before it declares war (formal war needs an assembled attack force). Base
+-- Aggressive already adds UNIT_COMBAT +25, yet Montezuma ended the 2026-10-04
+-- test with 1 land unit in 10 cities. Other leaders get army demand only from
+-- At War and the later-era lists (AI_Strategies.sql, AI_Yields.sql).
 -- ============================================================================
 
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseAggressiveMilitaryPseudoYields'),
-('RoseAggressiveMilitaryDiplomacy');
+('RoseAggressiveMilitaryDiplomacy'),
+('RoseAggressiveMilitaryBuildings');
 
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseAggressiveMilitaryPseudoYields', 'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'PseudoYields'),
-('RoseAggressiveMilitaryDiplomacy',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'DiplomaticActions');
+('RoseAggressiveMilitaryDiplomacy',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'DiplomaticActions'),
+('RoseAggressiveMilitaryBuildings',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'Buildings');
 
 DELETE FROM AiFavoredItems
 WHERE ListType IN (
     'RoseAggressiveMilitaryPseudoYields',
-    'RoseAggressiveMilitaryDiplomacy'
+    'RoseAggressiveMilitaryDiplomacy',
+    'RoseAggressiveMilitaryBuildings'
 );
 
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_DIPLOMATIC_BONUS',    1, -15),
+('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_UNIT_COMBAT',         1,  30),
+('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER', 1, 20),
+('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',  1, 15),
 ('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_FORMAL_WAR',  1,   0),
-('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_SURPRISE_WAR', 1,  0);
+('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_SURPRISE_WAR', 1,  0),
+-- Grand Master's Chapel lets Faith buy land units; only the two AIs that had
+-- it bought armies with Faith in the 2026-10-04 test, while four others banked
+-- 600-3,600 Faith. Tier-2 government buildings exclude each other, so this is
+-- for military leaders only (and Military Recovery, AI_Strategies.sql). RH and
+-- Real Strategy favor government buildings the same way, by victory type.
+('RoseAggressiveMilitaryBuildings',    'BUILDING_GOV_FAITH',               1, 100);
 
 -- ============================================================================
 -- 7. OTHER LEADER-SPECIFIC DISTRICTS

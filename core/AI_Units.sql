@@ -38,3 +38,35 @@ INSERT OR IGNORE INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId
 
 INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value) VALUES
 ('ROSE_BARB_COMBAT_AI', 'Amount', 5);
+
+-- ============================================================================
+-- AI unit upgrade discount (Prince difficulty and above)
+-- AI armies kept obsolete units (Trebuchets beside Field Cannons, Crossbowmen
+-- beside Line Infantry in 2026-10 logs). Upgrades cost 35% less Gold and 35%
+-- fewer strategic resources, as in RH (LAI_Main3.sql). Stacks with Professional
+-- Army (50%). The AI still upgrades only when its Upgrade Units tree runs.
+-- Same requirement set as the barbarian bonus above (AI + Prince or higher).
+-- The resource discount is Gathering Storm only and is skipped without it.
+-- ============================================================================
+
+INSERT OR IGNORE INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId) VALUES
+('ROSE_AI_UPGRADE_GOLD_DISCOUNT', 'MODIFIER_PLAYER_ADJUST_UNIT_UPGRADE_DISCOUNT_PERCENT', 'PLAYER_IS_HIGH_DIFFICULTY_AI');
+
+INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value) VALUES
+('ROSE_AI_UPGRADE_GOLD_DISCOUNT', 'Amount', 35);
+
+INSERT OR IGNORE INTO TraitModifiers (TraitType, ModifierId) VALUES
+('TRAIT_LEADER_MAJOR_CIV', 'ROSE_AI_UPGRADE_GOLD_DISCOUNT');
+
+INSERT OR IGNORE INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId)
+SELECT 'ROSE_AI_UPGRADE_RESOURCE_DISCOUNT', 'MODIFIER_PLAYER_ADJUST_UNIT_UPGRADE_RESOURCE_COST_MODIFIER', 'PLAYER_IS_HIGH_DIFFICULTY_AI'
+WHERE EXISTS (SELECT 1 FROM DynamicModifiers
+              WHERE ModifierType = 'MODIFIER_PLAYER_ADJUST_UNIT_UPGRADE_RESOURCE_COST_MODIFIER');
+
+INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value)
+SELECT 'ROSE_AI_UPGRADE_RESOURCE_DISCOUNT', 'Amount', 35
+WHERE EXISTS (SELECT 1 FROM Modifiers WHERE ModifierId = 'ROSE_AI_UPGRADE_RESOURCE_DISCOUNT');
+
+INSERT OR IGNORE INTO TraitModifiers (TraitType, ModifierId)
+SELECT 'TRAIT_LEADER_MAJOR_CIV', 'ROSE_AI_UPGRADE_RESOURCE_DISCOUNT'
+WHERE EXISTS (SELECT 1 FROM Modifiers WHERE ModifierId = 'ROSE_AI_UPGRADE_RESOURCE_DISCOUNT');

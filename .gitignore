@@ -1,0 +1,3 @@
+# Local investigation artifacts and agent tooling.
+.scratch/
+.agents/

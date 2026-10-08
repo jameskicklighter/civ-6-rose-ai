@@ -59,16 +59,16 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, Thres
 -- implemented in Rose_AI_Gameplay.lua. They respond only to wars against other major
 -- civilizations; city-state wars do not redirect the entire economy.
 --
--- At War maintains unit replacement, deemphasizes optional infrastructure, and
--- adds one city-assault slot. The base allowance is one slot plus one per war,
--- and planned attacks on city-states could hold both while the real war enemy
--- went unattacked (Phoenicia, 2026-10-03 multiplayer log).
+-- At War maintains unit replacement and deemphasizes optional infrastructure.
+-- It adds no assault slot: an extra slot (tried 2026-10-03) let Gaul run five
+-- assaults at once, mostly on city-states, with teams too small to take cities.
+-- It also stops new city-state wars and values enemy cities more (see below).
 -- Military Recovery stacks when our military is below 70% of the combined
--- opposing strength and removes one assault slot in exchange for defense. With
--- At War active that cancels its extra slot; if At War is in its 20-turn
--- restart cooldown, the AI keeps one slot per war rather than dropping to zero.
+-- opposing strength, trading one assault slot for defense and reconstruction.
 -- War Advantage suppresses voluntary peace only while our military is at
 -- least 125% of the combined opposing strength.
+-- Austerity (section 2b) nudges a broke AI toward income without touching its
+-- units or operations.
 -- ============================================================================
 
 INSERT OR IGNORE INTO Types (Type, Kind) VALUES
@@ -102,48 +102,71 @@ INSERT OR IGNORE INTO StrategyConditions
 ('STRATEGY_ROSE_WAR_ADVANTAGE',     'Call Lua Function', 'RoseForbidStrategyWarAdvantage',     125, 1);
 
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseAtWarOperations'),
 ('RoseAtWarYields'),
 ('RoseAtWarPseudoYields'),
 ('RoseMilitaryRecoveryOperations'),
 ('RoseMilitaryRecoveryYields'),
 ('RoseMilitaryRecoveryPseudoYields'),
-('RoseWarAdvantageDiplomacy');
+('RoseMilitaryRecoveryBuildings'),
+('RoseWarAdvantageDiplomacy'),
+('RoseAtWarDiplomacy');
 
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseAtWarOperations',                'AiOperationTypes'),
 ('RoseAtWarYields',                    'Yields'),
 ('RoseAtWarPseudoYields',              'PseudoYields'),
 ('RoseMilitaryRecoveryOperations',     'AiOperationTypes'),
 ('RoseMilitaryRecoveryYields',         'Yields'),
 ('RoseMilitaryRecoveryPseudoYields',   'PseudoYields'),
-('RoseWarAdvantageDiplomacy',          'DiplomaticActions');
+('RoseMilitaryRecoveryBuildings',      'Buildings'),
+('RoseWarAdvantageDiplomacy',          'DiplomaticActions'),
+('RoseAtWarDiplomacy',                 'DiplomaticActions');
 
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_AT_WAR',            'RoseAtWarOperations'),
 ('STRATEGY_ROSE_AT_WAR',            'RoseAtWarYields'),
 ('STRATEGY_ROSE_AT_WAR',            'RoseAtWarPseudoYields'),
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryOperations'),
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryYields'),
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryPseudoYields'),
-('STRATEGY_ROSE_WAR_ADVANTAGE',     'RoseWarAdvantageDiplomacy');
+('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryBuildings'),
+('STRATEGY_ROSE_WAR_ADVANTAGE',     'RoseWarAdvantageDiplomacy'),
+('STRATEGY_ROSE_AT_WAR',            'RoseAtWarDiplomacy');
 
 INSERT OR REPLACE INTO AiFavoredItems
     (ListType, Item, Favored, Value) VALUES
--- Sustained wartime production and replacement, plus one assault slot so the
--- war enemy can be attacked even when planned attacks hold the base slots.
-('RoseAtWarOperations',   'CITY_ASSAULT',                        1,   1),
+-- Sustained wartime production and replacement without adding assault slots.
+-- Army demand was +20/+10/+10 until 2026-10-04: in that test AIs at war still
+-- held 6-9 land units for 8-10 cities (Germany 7 in three wars at turn 100,
+-- Sweden 6 with 3,849 Gold at turn 196), so it is raised to +50/+30/+25.
 ('RoseAtWarYields',       'YIELD_PRODUCTION',                    1,  10),
 ('RoseAtWarYields',       'YIELD_GOLD',                          1,  10),
-('RoseAtWarPseudoYields', 'PSEUDOYIELD_UNIT_COMBAT',             1,  20),
+('RoseAtWarPseudoYields', 'PSEUDOYIELD_UNIT_COMBAT',             1,  50),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_UNIT_NAVAL_COMBAT',       1,  15),
-('RoseAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER',    1,  10),
-('RoseAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',     1,  10),
+('RoseAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER',    1,  30),
+('RoseAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',     1,  25),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_DISTRICT',                1, -25),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',             1, -25),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_WONDER',                  1, -15),
+-- Attack-target value while fighting a major (percent of the defaults: defending
+-- units 80, city base 450). Kept on At War so peacetime war desire is
+-- unchanged. CITY_DEFENSES is not cut further, but a higher base lifts every
+-- enemy city, so it also weakens the frontier-first effect of the defense
+-- terms: at the zero clamp +75 acts roughly like a 40% cut to all subtracted
+-- terms, and interior cities can score. Walled reach (16 planned, 22 wartime)
+-- bounds that. Measure chosen targets' distance against the 2026-10-04 game.
+('RoseAtWarPseudoYields', 'PSEUDOYIELD_CITY_DEFENDING_UNITS',    1, -40),
+('RoseAtWarPseudoYields', 'PSEUDOYIELD_CITY_BASE',               1,  75),
+-- No new city-state wars while fighting a major. Diplomacy skips disfavored
+-- actions. Spain's war on Jerusalem (2026-10-04b, turn 45) cut its only trade
+-- route and tied up a second assault for 79 turns. Side effect to watch: a
+-- planned assault on a city-state we are not at war with can now never get its
+-- declaration, so it fails its pre-war limiter and may restart on that target,
+-- holding the planned slot (the wartime slot is unaffected).
+('RoseAtWarDiplomacy', 'DIPLOACTION_DECLARE_WAR_MINOR_CIV',      0,   0),
 
 -- Recovery stacks with At War and temporarily favors rebuilding over attack.
+-- The -1 removes the planned (CITY_ASSAULT) slot; the wartime slot type
+-- (ROSE_WARTIME_ASSAULT, AI_BehaviorTreeOps.sql) is left alone, so a
+-- recovering AI with one war keeps one assault, now aimed at its war enemy.
 ('RoseMilitaryRecoveryOperations',   'CITY_ASSAULT',                         1,  -1),
 ('RoseMilitaryRecoveryOperations',   'OP_DEFENSE',                           1,   2),
 ('RoseMilitaryRecoveryYields',       'YIELD_PRODUCTION',                     1,  25),
@@ -155,10 +178,78 @@ INSERT OR REPLACE INTO AiFavoredItems
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_DISTRICT',                 1, -50),
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',              1, -50),
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_WONDER',                   1, -25),
+-- Grand Master's Chapel (tier-2 government building) lets Faith buy land units.
+-- Only the two AIs that had it bought armies with Faith in the 2026-10-04 test.
+('RoseMilitaryRecoveryBuildings',    'BUILDING_GOV_FAITH',                   1, 100),
 
 -- Strong AIs keep pressing; weak and evenly matched AIs retain normal peace logic.
 ('RoseWarAdvantageDiplomacy', 'DIPLOACTION_PROPOSE_PEACE_DEAL', 0, 0),
 ('RoseWarAdvantageDiplomacy', 'DIPLOACTION_MAKE_PEACE',         0, 0);
+
+-- ============================================================================
+-- 2b. AUSTERITY (income nudge for a broke AI)
+--
+-- Spain (2026-10-04b) built 22 land units, declared war on the city-state it
+-- traded with, lost its only trade route, then sat at zero Gold for about 40
+-- turns while its army shrank to 5. These strategies only shift priorities
+-- toward income; they never disband units, change operations or slots, or
+-- touch savings. Rose_AI_Gameplay.lua latches austerity when the Gold balance
+-- is below 30 and income after maintenance has been negative for two turns,
+-- and releases it when the balance is above 100 and income has been positive
+-- for three turns, or after ten turns of positive income at any balance. Austerity At War applies only while also at war with a
+-- major, and trims part of At War's extra unit demand (+50/+30/+25 becomes
+-- +30/+20/+15), so demand stays above the base game's. Exception: if At War
+-- is held off by the engine's 20-turn restart cooldown while Austerity At War
+-- runs, the trim applies to base demand. Same Forbidden layout as section 2;
+-- ThresholdValue is documentation only.
+-- ============================================================================
+
+INSERT OR IGNORE INTO Types (Type, Kind) VALUES
+('STRATEGY_ROSE_AUSTERITY',        'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_AUSTERITY_AT_WAR', 'KIND_VICTORY_STRATEGY');
+
+INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
+('STRATEGY_ROSE_AUSTERITY',        0),
+('STRATEGY_ROSE_AUSTERITY_AT_WAR', 0);
+
+INSERT OR IGNORE INTO StrategyConditions
+    (StrategyType, ConditionFunction, Disqualifier) VALUES
+('STRATEGY_ROSE_AUSTERITY',        'Is Not Major', 1),
+('STRATEGY_ROSE_AUSTERITY_AT_WAR', 'Is Not Major', 1);
+
+INSERT OR IGNORE INTO StrategyConditions
+    (StrategyType, ConditionFunction, StringValue, ThresholdValue, Forbidden) VALUES
+('STRATEGY_ROSE_AUSTERITY',        'Call Lua Function', 'RoseForbidStrategyAusterity',      30, 1),
+('STRATEGY_ROSE_AUSTERITY_AT_WAR', 'Call Lua Function', 'RoseForbidStrategyAusterityAtWar', 30, 1);
+
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseAusterityYields'),
+('RoseAusterityPseudoYields'),
+('RoseAusterityDistricts'),
+('RoseAusterityAtWarPseudoYields');
+
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseAusterityYields',            'Yields'),
+('RoseAusterityPseudoYields',      'PseudoYields'),
+('RoseAusterityDistricts',         'Districts'),
+('RoseAusterityAtWarPseudoYields', 'PseudoYields');
+
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_AUSTERITY',        'RoseAusterityYields'),
+('STRATEGY_ROSE_AUSTERITY',        'RoseAusterityPseudoYields'),
+('STRATEGY_ROSE_AUSTERITY',        'RoseAusterityDistricts'),
+('STRATEGY_ROSE_AUSTERITY_AT_WAR', 'RoseAusterityAtWarPseudoYields');
+
+INSERT OR REPLACE INTO AiFavoredItems
+    (ListType, Item, Favored, Value) VALUES
+('RoseAusterityYields',            'YIELD_GOLD',                       1,  30),
+('RoseAusterityPseudoYields',      'PSEUDOYIELD_UNIT_TRADE',           1,  50),
+('RoseAusterityPseudoYields',      'PSEUDOYIELD_WONDER',               1, -25),
+('RoseAusterityDistricts',         'DISTRICT_COMMERCIAL_HUB',          1,  50),
+('RoseAusterityDistricts',         'DISTRICT_HARBOR',                  1,  50),
+('RoseAusterityAtWarPseudoYields', 'PSEUDOYIELD_UNIT_COMBAT',          1, -20),
+('RoseAusterityAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER', 1, -10),
+('RoseAusterityAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',  1, -10);
 
 -- ============================================================================
 -- 3. CONSIDER RELIGION STRATEGY (DISABLED)

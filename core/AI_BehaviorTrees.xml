@@ -15,12 +15,17 @@ How to read this file:
 Applied here:
 - Replacement Simple City Defense tree.
 - Replacement Naval Superiority Tree.
-- Replacement Siege City Assault tree: about 15-turn limit on initial assembly.
+- Replacement Siege City Assault tree: about 15-turn limit on initial assembly
+  and about 20 turns for the final assault.
 - Naval Superiority team exclusions for non-naval unit categories.
 - Lower city-assault strength ratios so assembled armies can proceed.
 - Siege-unit (or, late, bomber) requirement for walled-city attacks.
 - Settlement escort limits that reserve siege units for military operations.
 - Small data tuning for Simple Operation Attack and Early City Assault.
+- Nuclear Assault: base contract-link fix, no strength requirement,
+  priority 5, and one stolen delivery unit.
+- Wartime assaults retyped to their own slot type; lower wartime walled odds.
+- City Defense typed OP_DEFENSE (limited to 3 at once) with a 3-unit cap.
 
 Not applied here:
 - RH Air Blitz Tree. The source tree contains an obvious TreeName typo
@@ -78,6 +83,21 @@ Not applied here:
       <Where TeamName="Naval Superiority Force" OperationName="Naval Superiority" />
       <Set MaxUnits="3" />
     </Update>
+    <!--
+    Nuclear Assault readiness. A recruit team is ready only when its minimums
+    are met and its strength S >= EnemyStr + Advantage x min(my, their
+    military strength) (XP2 DLL 0x4E29B0, 0x4CF2B0). A lone Bomber never
+    matched a defended target's strength at base Initial -1: Korea held a
+    Bomber on turns 180, 182 and 183 of the 2026-10-04 test and still logged
+    "Ready: NO". An advantage of -5 or lower is a DLL sentinel that makes the
+    required strength 0, as base data already uses for the naval attack
+    teams. Ongoing matches so the running operation does not try to recruit
+    more units for strength. RH uses -800 for the same reason.
+    -->
+    <Update>
+      <Where TeamName="Nuclear Attack" OperationName="Nuclear Assault" />
+      <Set InitialStrengthAdvantage="-5" OngoingStrengthAdvantage="-5" />
+    </Update>
   </AiOperationTeams>
 
   <OpTeamRequirements>
@@ -115,6 +135,11 @@ Not applied here:
     broader SIEGE_ALL role available because it also includes defensive anti-air.
     -->
     <Replace TeamName="City Defense" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
+    <!-- At most three ordinary combat units per defense operation (base: no maximum). Soft in practice. -->
+    <Update>
+      <Where TeamName="City Defense" AiType="UNITAI_COMBAT" />
+      <Set MaxNumber="3" />
+    </Update>
 
     <!-- Bombers are AIR_SIEGE rather than AIR and cannot execute the simple attack tree's ground movement. -->
     <Replace TeamName="Simple Early Attack Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
@@ -146,6 +171,19 @@ Not applied here:
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_NUCLEAR" MinNumber="0" MaxNumber="0" />
+
+    <!--
+    Nuclear Assault may now take its delivery unit from other operations (see
+    the Nuclear Assault tree data below). Cap it at one Bomber, Jet Bomber or
+    Nuclear Submarine so it cannot strip every bomber from running sieges. Base
+    has no maximum; UNITTYPE_NUCLEAR_ESCORT has no member units. With the -5
+    strength advantage (AiOperationTeams above) the strength pass should add
+    nothing anyway, so this is a safety cap.
+    -->
+    <Update>
+      <Where TeamName="Nuclear Attack" AiType="UNITTYPE_NUCLEAR" />
+      <Set MaxNumber="1" />
+    </Update>
   </OpTeamRequirements>
 
   <AiOperationDefs>
@@ -174,6 +212,45 @@ Not applied here:
     <Update>
       <Where OperationName="Wartime Attack Walled City" />
       <Set MaxTargetDistInRegion="22" MaxTargetDistInArea="22" MaxTargetDistInWorld="21" />
+    </Update>
+
+    <!--
+    Wartime assaults use their own operation type and per-war slots
+    (ROSE_WARTIME_ASSAULT, defined with its limits in AI_BehaviorTreeOps.sql),
+    so planned attacks on third parties can no longer hold every slot during a
+    major war. Planned definitions stay CITY_ASSAULT.
+    Wartime walled odds 0.4 -> 0.3 (RH 0.3); planned walled stays 0.6.
+    -->
+    <Update>
+      <Where OperationName="Wartime Attack Walled City" />
+      <Set OperationType="ROSE_WARTIME_ASSAULT" MinOddsOfSuccess="0.3" />
+    </Update>
+    <Update>
+      <Where OperationName="Wartime Attack Enemy City" />
+      <Set OperationType="ROSE_WARTIME_ASSAULT" />
+    </Update>
+
+    <!--
+    City Defense had no OperationType, so nothing capped how many ran at once
+    (up to 12 per AI). OP_DEFENSE limits it to 3, or 5 under Military Recovery
+    (AI_BehaviorTreeOps.sql).
+    -->
+    <Update>
+      <Where OperationName="City Defense" />
+      <Set OperationType="OP_DEFENSE" />
+    </Update>
+
+    <!--
+    Nuclear Assault priority 3 -> 5. A recruit node takes a unit from another
+    operation only if its operation priority is strictly higher (XP2 DLL
+    comparator 0x543830). Every city assault is 3 and City Defense is 4, so at
+    the base 3 the operation could not take the Bombers and Nuclear Submarines
+    held by sieges; in the 2026-10-04 test all 16 of Korea's nuclear operations
+    failed on their first turn that way. RH uses 4.
+    -->
+    <Update>
+      <Where OperationName="Nuclear Assault" />
+      <Set Priority="5" />
     </Update>
   </AiOperationDefs>
 
@@ -342,25 +419,32 @@ Not applied here:
   base trees), so 30 gives about 15 turns. When it expires the operation ends
   and the AI can re-plan with a fresh target and odds check.
 
-  Inserting Node 7 shifts every later base NodeId by one. The TreeData below is
-  the base data with Rose's earlier tuning carried to the shifted ids:
+  A second failing Turn Limiter (Node 43, Turns to Run 40, about 20 turns)
+  wraps the final assault. That phase had no limit: a Gaul siege sat in it for
+  40 turns with 1-3 units (2026-10-03b log). China's successful 17-turn siege
+  fits inside it. When it expires the units are freed to regroup.
+
+  Inserting Node 7 shifts every later base NodeId by one, and Node 43 shifts
+  the final-assault nodes by one more (base 42-56 are Rose 44-58). The TreeData
+  below is the base data with Rose's earlier tuning carried to the shifted ids:
   - Shorter contract/recruit limits (Nodes 11, 12) and phase limits (18, 33).
   - Node 27 pre-war limiter (base Node 26) runs seven turns so its five-turn
     diplomacy contract receives a count-six resolution tick before count seven fails.
   - Stealing allowed only during initial assembly (Node 12); later recruit
-    nodes (23, 37, 45) use a 12-tile range and cannot strip distant operations.
-  Generated and checked by .scratch/siege-gather-limit (gen_tree.py, verify.py).
+    nodes (23, 37, 46) use a 12-tile range and cannot strip distant operations.
+  Generated and checked by .scratch/siege-gather-limit (gen_tree.py, verify.py);
+  Node 43 added by .scratch/late-offense/insert_final_limiter.py.
   -->
   <BehaviorTreeNodes>
     <Delete TreeName="Siege City Assault" />
 
-    <Row NodeType="Concurrent" NodeId="0" TreeName="Siege City Assault" JumpTo="58" />
+    <Row NodeType="Concurrent" NodeId="0" TreeName="Siege City Assault" JumpTo="59" />
       <Row NodeType="Decode Trigger" NodeId="1" TreeName="Siege City Assault" />
       <Row NodeType="Priority" NodeId="2" TreeName="Siege City Assault" JumpTo="5" />
         <Row NodeType="Can Alpha City" NodeId="3" TreeName="Siege City Assault" />
         <Row NodeType="Operation Defend Units" NodeId="4" TreeName="Siege City Assault" />
       <Row NodeType="Operation Change Target" NodeId="5" TreeName="Siege City Assault" />
-      <Row NodeType="Sequence" NodeId="6" TreeName="Siege City Assault" JumpTo="58" />
+      <Row NodeType="Sequence" NodeId="6" TreeName="Siege City Assault" JumpTo="59" />
         <Row NodeType="Turn Limiter" NodeId="7" TreeName="Siege City Assault" JumpTo="16" /> <!-- Rose: fail initial assembly after about 15 turns. -->
           <Row NodeType="Concurrent" NodeId="8" TreeName="Siege City Assault" JumpTo="16" />
             <Row NodeType="Priority" NodeId="9" TreeName="Siege City Assault" JumpTo="13" />
@@ -397,21 +481,22 @@ Not applied here:
             <Row NodeType="Operation Pillage" NodeId="40" TreeName="Siege City Assault" />
             <Row NodeType="Operation Siege City" NodeId="41" TreeName="Siege City Assault" />
             <Row NodeType="Operation Move" NodeId="42" TreeName="Siege City Assault" />
-        <Row NodeType="Concurrent" NodeId="43" TreeName="Siege City Assault" JumpTo="58" />
-          <Row NodeType="Operation Change Target" NodeId="44" TreeName="Siege City Assault" />
-          <Row NodeType="Recruit Units" NodeId="45" TreeName="Siege City Assault" />
-          <Row NodeType="Priority" NodeId="46" TreeName="Siege City Assault" JumpTo="50" />
-            <Row NodeType="Not" NodeId="47" TreeName="Siege City Assault" JumpTo="49" />
-              <Row NodeType="Can Alpha City" NodeId="48" TreeName="Siege City Assault" />
-            <Row NodeType="Operation Attack City" NodeId="49" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Attack Units" NodeId="50" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Pillage" NodeId="51" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Siege City" NodeId="52" TreeName="Siege City Assault" />
-          <Row NodeType="Build Military Improvement" NodeId="53" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Air Assault" NodeId="54" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Attack City" NodeId="55" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Pillage" NodeId="56" TreeName="Siege City Assault" />
-          <Row NodeType="Operation Move" NodeId="57" TreeName="Siege City Assault" />
+        <Row NodeType="Turn Limiter" NodeId="43" TreeName="Siege City Assault" JumpTo="59" /> <!-- Rose: end a final assault that has not taken the city after about 20 turns. -->
+          <Row NodeType="Concurrent" NodeId="44" TreeName="Siege City Assault" JumpTo="59" />
+            <Row NodeType="Operation Change Target" NodeId="45" TreeName="Siege City Assault" />
+            <Row NodeType="Recruit Units" NodeId="46" TreeName="Siege City Assault" />
+            <Row NodeType="Priority" NodeId="47" TreeName="Siege City Assault" JumpTo="51" />
+              <Row NodeType="Not" NodeId="48" TreeName="Siege City Assault" JumpTo="50" />
+                <Row NodeType="Can Alpha City" NodeId="49" TreeName="Siege City Assault" />
+              <Row NodeType="Operation Attack City" NodeId="50" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Attack Units" NodeId="51" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Pillage" NodeId="52" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Siege City" NodeId="53" TreeName="Siege City Assault" />
+            <Row NodeType="Build Military Improvement" NodeId="54" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Air Assault" NodeId="55" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Attack City" NodeId="56" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Pillage" NodeId="57" TreeName="Siege City Assault" />
+            <Row NodeType="Operation Move" NodeId="58" TreeName="Siege City Assault" />
   </BehaviorTreeNodes>
 
   <TreeData>
@@ -518,27 +603,29 @@ Not applied here:
     <Row DefnId="1" NodeId="42" TreeName="Siege City Assault" DefaultData="2" />
     <Row DefnId="2" NodeId="42" TreeName="Siege City Assault" DefaultData="false" />
     <Row DefnId="3" NodeId="42" TreeName="Siege City Assault" DefaultData="2" />
-    <Row DefnId="0" NodeId="44" TreeName="Siege City Assault" DefaultData="-2" />
-    <Row DefnId="1" NodeId="44" TreeName="Siege City Assault" DefaultData="-8" />
-    <Row DefnId="0" NodeId="45" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="2" NodeId="45" TreeName="Siege City Assault" DefaultData="12" /> <!-- Recruit range 12. -->
-    <Row DefnId="4" NodeId="45" TreeName="Siege City Assault" Tag="Present Value" />
-    <Row DefnId="6" NodeId="45" TreeName="Siege City Assault" DefaultData="false" /> <!-- No stealing. -->
-    <Row DefnId="7" NodeId="45" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="0" NodeId="50" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="1" NodeId="50" TreeName="Siege City Assault" DefaultData="False" />
-    <Row DefnId="4" NodeId="50" TreeName="Siege City Assault" DefaultData="True" />
+    <Row DefnId="0" NodeId="43" TreeName="Siege City Assault" DefaultData="40" /> <!-- Final-assault Turn Limiter: fails near count 20. -->
+    <Row DefnId="1" NodeId="43" TreeName="Siege City Assault" DefaultData="true" /> <!-- Fail at Limit: end the operation so the army can regroup. -->
+    <Row DefnId="0" NodeId="45" TreeName="Siege City Assault" DefaultData="-2" />
+    <Row DefnId="1" NodeId="45" TreeName="Siege City Assault" DefaultData="-8" />
+    <Row DefnId="0" NodeId="46" TreeName="Siege City Assault" DefaultData="true" />
+    <Row DefnId="2" NodeId="46" TreeName="Siege City Assault" DefaultData="12" /> <!-- Recruit range 12. -->
+    <Row DefnId="4" NodeId="46" TreeName="Siege City Assault" Tag="Present Value" />
+    <Row DefnId="6" NodeId="46" TreeName="Siege City Assault" DefaultData="false" /> <!-- No stealing. -->
+    <Row DefnId="7" NodeId="46" TreeName="Siege City Assault" DefaultData="true" />
     <Row DefnId="0" NodeId="51" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="1" NodeId="51" TreeName="Siege City Assault" DefaultData="false" />
-    <Row DefnId="0" NodeId="53" TreeName="Siege City Assault" DefaultData="true" />
-    <Row DefnId="0" NodeId="54" TreeName="Siege City Assault" DefaultData="3" />
-    <Row DefnId="1" NodeId="54" TreeName="Siege City Assault" DefaultData="1" />
-    <Row DefnId="2" NodeId="54" TreeName="Siege City Assault" DefaultData="2" />
-    <Row DefnId="3" NodeId="54" TreeName="Siege City Assault" DefaultData="UNITTYPE_AIR_SIEGE" />
-    <Row DefnId="0" NodeId="57" TreeName="Siege City Assault" DefaultData="1" />
-    <Row DefnId="1" NodeId="57" TreeName="Siege City Assault" DefaultData="0" />
-    <Row DefnId="2" NodeId="57" TreeName="Siege City Assault" DefaultData="0" />
-    <Row DefnId="3" NodeId="57" TreeName="Siege City Assault" DefaultData="2" />
+    <Row DefnId="1" NodeId="51" TreeName="Siege City Assault" DefaultData="False" />
+    <Row DefnId="4" NodeId="51" TreeName="Siege City Assault" DefaultData="True" />
+    <Row DefnId="0" NodeId="52" TreeName="Siege City Assault" DefaultData="true" />
+    <Row DefnId="1" NodeId="52" TreeName="Siege City Assault" DefaultData="false" />
+    <Row DefnId="0" NodeId="54" TreeName="Siege City Assault" DefaultData="true" />
+    <Row DefnId="0" NodeId="55" TreeName="Siege City Assault" DefaultData="3" />
+    <Row DefnId="1" NodeId="55" TreeName="Siege City Assault" DefaultData="1" />
+    <Row DefnId="2" NodeId="55" TreeName="Siege City Assault" DefaultData="2" />
+    <Row DefnId="3" NodeId="55" TreeName="Siege City Assault" DefaultData="UNITTYPE_AIR_SIEGE" />
+    <Row DefnId="0" NodeId="58" TreeName="Siege City Assault" DefaultData="1" />
+    <Row DefnId="1" NodeId="58" TreeName="Siege City Assault" DefaultData="0" />
+    <Row DefnId="2" NodeId="58" TreeName="Siege City Assault" DefaultData="0" />
+    <Row DefnId="3" NodeId="58" TreeName="Siege City Assault" DefaultData="2" />
   </TreeData>
 
   <!-- Existing tree data tuning: Early City Assault. Node 16 = 13 (base 15; fails near turn 6 because
@@ -552,6 +639,34 @@ Not applied here:
       <Where DefnId="0" NodeId="26" TreeName="Early City Assault" />
       <Set DefaultData="7" />
     </Update>
+  </TreeData>
+
+  <!--
+  Existing tree data tuning: Nuclear Assault (base nodes; tree not replaced)
+
+  - Base data bug: a Contract Manager is linked to its Recruit node by a shared
+    Tag (Siege City Assault uses "Initial recruits" on both). Here node 7's
+    contract (DefnId 0) was tagged "Present Value", the Recruit node's Recruit
+    Value, so no contract was ever placed ("Contract for: NONE" in
+    AI_Operation.csv). Tag it like node 8's Contract ID so the operation can
+    order a Bomber, Jet Bomber or Nuclear Submarine (Turn Limit stays 10).
+  - Allow Stealing (DefnId 6) on both Recruit nodes, 8 (initial) and 13
+    (ongoing). With the operation's priority 5 (above), the operation can take
+    one delivery unit from a running siege (Bombers, Nuclear Submarines) or
+    from City Defense's naval team (Nuclear Submarines; City Defense already
+    excludes bombers).
+  - These only help together with the -5 strength advantage in
+    AiOperationTeams; without it a recruited Bomber still fails readiness.
+  The "Will use nukes" check is unchanged: it already passes against a major
+  war enemy once the war score is negative.
+  -->
+  <TreeData>
+    <Update>
+      <Where DefnId="0" NodeId="7" TreeName="Nuclear Assault" />
+      <Set Tag="Initial Recruits" />
+    </Update>
+    <Row DefnId="6" NodeId="8" TreeName="Nuclear Assault" DefaultData="true" />
+    <Row DefnId="6" NodeId="13" TreeName="Nuclear Assault" DefaultData="true" />
   </TreeData>
 
 </GameInfo>

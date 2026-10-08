@@ -1,12 +1,13 @@
 -- ============================================================================
 -- Rose AI: Tech + Civic Priorities
 -- Favors Currency tech in Ancient/Classical/Medieval eras so the AI unlocks
--- Commercial Hub districts earlier. Favors Feudalism civic and all
+-- Commercial Hub districts earlier, and Engineering in Ancient/Classical so
+-- walled-city assaults can get a siege unit. Favors Feudalism civic and all
 -- government-unlocking civics across every era.
 -- ============================================================================
 
 -- ============================================================================
--- 1. TECH PRIORITIES — Currency
+-- 1. TECH PRIORITIES — Currency, Engineering
 -- ============================================================================
 
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -27,7 +28,13 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseAncientTechs',   'TECH_CURRENCY', 1, 100),
 ('RoseClassicalTechs', 'TECH_CURRENCY', 1, 100),
-('RoseMedievalTechs',  'TECH_CURRENCY', 1, 100);
+('RoseMedievalTechs',  'TECH_CURRENCY', 1, 100),
+-- Engineering (Catapult, Aqueduct): walled-city assaults need one siege unit
+-- (AI_BehaviorTreeOps.sql). Before Engineering none is trainable, so an assault
+-- on a walled city fails on its first turn and restarts the next: Russia did
+-- this six turns running at turns 44-49 of the 2026-10-04 test.
+('RoseAncientTechs',   'TECH_ENGINEERING', 1, 50),
+('RoseClassicalTechs', 'TECH_ENGINEERING', 1, 50);
 
 -- ============================================================================
 -- 2. CIVIC PRIORITIES — Feudalism + Government-unlocking civics

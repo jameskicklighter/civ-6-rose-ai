@@ -5,26 +5,42 @@
 --    civic are met, grant it for free. Prevents AI from skipping government
 --    upgrades because it beelined past side-branch civics.
 --
--- 2. Tree-filling civics: When Guilds or Medieval Faires is completed, grant
+-- 2. Tree-filling civics: Once Guilds or Medieval Faires is owned, grant
 --    Military Training, Theology, and their prereqs if missing. The AI often
 --    ignores one or both edges of the early civic tree.
 --
--- Grants cascade: granting one civic may satisfy another's prereqs.
+-- Civic grants run only at the AI player's turn start, one civic per player
+-- per game turn: the first ready government civic, otherwise the first
+-- missing tree-fill civic. Remaining grants follow on later turns, so the AI
+-- changes government at most once per turn. A grant waits a turn when the
+-- AI's own civic completes this turn.
 --
 -- 3. Dynamic war strategies: Forbidden Lua conditions control wartime
 --    replacement, weak-army recovery, and strength-gated peace resistance
 --    database lists.
 --
+-- 3b. Austerity: a turn-start latch on Gold balance and net income drives two
+--    Forbidden Lua conditions that shift priorities toward income. It never
+--    touches units, operations, or the treasury.
+--
+-- 3c. Stuck Trader diagnostic: print-only lines for AI Traders that stay on
+--    one plot for several turn starts (only with ROSE_VERBOSE_LOGS on).
+--
 -- 4. Special operations:
 --    - Any AI major can launch a small, cooldown-controlled naval interception
 --      when an uncommitted melee ship is near an at-war enemy combat ship.
 --
--- 5. Policy replacement guard: clear an AI's slotted predecessor policy as
---    soon as a newly completed civic unlocks its replacement. This avoids the
---    delayed-obsolescence rollover path that can suppress all policy effects.
+-- 5. Dead policy card repair: a base-game bug leaves slotted cards without
+--    their effects. Slots holding such cards (found by the InGame audit) are
+--    cleared at the AI's turn start, just before a civic completion that
+--    makes CultureAI slot its cards again.
 -- ============================================================================
 
 print("Rose AI: Loading gameplay support script");
+
+-- Per-turn diagnostic output (the stuck Trader lines). Off for release; errors,
+-- grants, strategy and austerity changes and policy repairs always print.
+local ROSE_VERBOSE_LOGS = false;
 
 -- War strategies use Forbidden Lua conditions with no positive condition, so
 -- an unanswered check could leave them allowed. Register the callbacks first:
@@ -41,6 +57,8 @@ end
 RegisterForbidCallback("RoseForbidStrategyAtWar");
 RegisterForbidCallback("RoseForbidStrategyMilitaryRecovery");
 RegisterForbidCallback("RoseForbidStrategyWarAdvantage");
+RegisterForbidCallback("RoseForbidStrategyAusterity");
+RegisterForbidCallback("RoseForbidStrategyAusterityAtWar");
 
 local NAVAL_SUPERIORITY_SUCCESS_COOLDOWN = 12;
 local NAVAL_SUPERIORITY_FAILURE_RETRY = 4;
@@ -57,34 +75,6 @@ for kUnitAiInfo in GameInfo.UnitAiInfos() do
 		tUnitAiTypes[kUnitAiInfo.UnitType] = tTypes;
 	end
 	tTypes[kUnitAiInfo.AiType] = true;
-end
-
--- Cache policy predecessors by the civic which unlocks their replacement.
--- ObsoletePolicies is data-driven, so this also covers DLC policy chains.
-local tPolicyReplacementsByCivic = {};
-local tReplacementPolicyTypes = {};
-for kObsoleteInfo in GameInfo.ObsoletePolicies() do
-	if kObsoleteInfo.ObsoletePolicy ~= nil then
-		local kOldPolicy = GameInfo.Policies[kObsoleteInfo.PolicyType];
-		local kNewPolicy = GameInfo.Policies[kObsoleteInfo.ObsoletePolicy];
-		if kOldPolicy ~= nil and kNewPolicy ~= nil then
-			tReplacementPolicyTypes[kOldPolicy.PolicyType] = true;
-			if kNewPolicy.PrereqCivic ~= nil then
-				local kCivic = GameInfo.Civics[kNewPolicy.PrereqCivic];
-				if kCivic ~= nil then
-					local tReplacements = tPolicyReplacementsByCivic[kCivic.Index];
-					if tReplacements == nil then
-						tReplacements = {};
-						tPolicyReplacementsByCivic[kCivic.Index] = tReplacements;
-					end
-					tReplacements[kOldPolicy.Index] = {
-						oldPolicyType = kOldPolicy.PolicyType,
-						newPolicyType = kNewPolicy.PolicyType,
-					};
-				end
-			end
-		end
-	end
 end
 
 -- ============================================================================
@@ -127,14 +117,14 @@ if GameInfo.Civics["CIVIC_CORPORATE_LIBERTARIANISM"] then
 end
 
 -- ============================================================================
--- Tree-filling civics: grant when ANY trigger civic is completed.
+-- Tree-filling civics: grant once ANY trigger civic is owned.
 -- Fills in skipped branches so the AI has Military Training and Theology
 -- (and their prereqs) by the time it reaches Medieval era.
 -- ============================================================================
 local iGuilds         = GameInfo.Civics["CIVIC_GUILDS"].Index;
 local iMedievalFaires = GameInfo.Civics["CIVIC_MEDIEVAL_FAIRES"].Index;
 
--- Civics to grant (in dependency order — prereqs first so cascade works)
+-- Civics to grant (in dependency order — prereqs first, one per turn)
 local tTreeFillCivics = {
 	GameInfo.Civics["CIVIC_MYSTICISM"].Index,
 	GameInfo.Civics["CIVIC_DRAMA_POETRY"].Index,
@@ -144,60 +134,35 @@ local tTreeFillCivics = {
 	GameInfo.Civics["CIVIC_MILITARY_TRAINING"].Index,
 };
 
--- Check all government civics and grant any whose prereqs are fully met.
--- Runs in a loop to handle cascades (e.g. Divine Right → Reformed Church).
-function GrantReadyGovtCivics(iPlayerID)
-	local pPlayer = Players[iPlayerID];
-	if pPlayer == nil then return; end
-	if not pPlayer:IsMajor() then return; end
-	if pPlayer:IsHuman() then return; end
-
-	local pCulture = pPlayer:GetCulture();
-	local bGrantedAny = true;
-
-	-- Keep looping until no new civics are granted (handles cascades)
-	while bGrantedAny do
-		bGrantedAny = false;
-		for _, entry in ipairs(tGovtCivics) do
-			if not pCulture:HasCivic(entry.civic) then
-				local bAllMet = true;
-				for _, iPrereq in ipairs(entry.prereqs) do
-					if not pCulture:HasCivic(iPrereq) then
-						bAllMet = false;
-						break;
-					end
-				end
-				if bAllMet then
-					pCulture:SetCivic(entry.civic, true);
-					bGrantedAny = true;
-					print("Rose AI: Granted civic index " .. entry.civic .. " to AI player " .. iPlayerID);
+-- First government civic in tGovtCivics order that is missing and whose
+-- prereqs are all owned, or nil. A grant made this turn may make the next
+-- entry ready (e.g. Divine Right → Reformed Church); it is granted next turn.
+local function FindReadyGovtCivic(pCulture)
+	for _, entry in ipairs(tGovtCivics) do
+		if not pCulture:HasCivic(entry.civic) then
+			local bAllMet = true;
+			for _, iPrereq in ipairs(entry.prereqs) do
+				if not pCulture:HasCivic(iPrereq) then
+					bAllMet = false;
+					break;
 				end
 			end
+			if bAllMet then return entry.civic; end
 		end
 	end
+	return nil;
 end
 
--- Grant tree-filling civics if the AI has completed Guilds or Medieval Faires.
--- These are early-tree civics the AI may have skipped entirely.
-function GrantTreeFillCivics(iPlayerID)
-	local pPlayer = Players[iPlayerID];
-	if pPlayer == nil then return; end
-	if not pPlayer:IsMajor() then return; end
-	if pPlayer:IsHuman() then return; end
-
-	local pCulture = pPlayer:GetCulture();
-
-	-- Only trigger once the AI has reached Guilds or Medieval Faires
+-- First missing tree-filling civic once the AI owns Guilds or Medieval Faires,
+-- or nil. These are early-tree civics the AI may have skipped entirely.
+local function FindTreeFillCivic(pCulture)
 	if not pCulture:HasCivic(iGuilds) and not pCulture:HasCivic(iMedievalFaires) then
-		return;
+		return nil;
 	end
-
 	for _, iCivic in ipairs(tTreeFillCivics) do
-		if not pCulture:HasCivic(iCivic) then
-			pCulture:SetCivic(iCivic, true);
-			print("Rose AI: Tree-fill granted civic index " .. iCivic .. " to AI player " .. iPlayerID);
-		end
+		if not pCulture:HasCivic(iCivic) then return iCivic; end
 	end
+	return nil;
 end
 
 -- ============================================================================
@@ -211,75 +176,290 @@ local function IsEligibleAIPlayer(pPlayer)
 		and not pPlayer:IsHuman();
 end
 
--- Clear policies which the just-completed civic replaces before the engine's
--- delayed rollover cleanup can remove them from an otherwise committed deck.
--- This deliberately does not force the replacement card; native CultureAI is
--- left to fill every newly open slot.
-local function ClearPoliciesReplacedByCivic(iPlayerID, iCivicID)
-	local tReplacements = tPolicyReplacementsByCivic[iCivicID];
-	if tReplacements == nil then return false; end
+-- ============================================================================
+-- Civic grants: one per eligible AI player per game turn, from turn start only
+--
+-- SetCivic fires GameEvents.OnCivicCulturevated synchronously, before it
+-- returns. Granting from that callback nested every cascade inside the
+-- previous grant, so the AI changed government several times in one turn
+-- (three tier-3 civics printed in reverse order). Grants therefore run only
+-- from PlayerTurnStarted. bGrantingCivic stops anything re-entered during a
+-- grant from granting again, and the persisted turn property stops a second
+-- PlayerTurnStarted for the same player-turn (or a reload) from doing so.
+--
+-- Every civic completion makes CultureAI commit its policy deck, and two
+-- commits in one turn are a common point for cards to lose their effects
+-- (HANDOFF W15). The AI's own civic completes later in its turn than this
+-- hook (2026-10-06 AI_GovtPolicies.csv: Persia's granted Reformed Church is
+-- logged before its researched Medieval Faires on turn 63), so the grant is
+-- deferred when the civic in progress is due this turn.
+-- ============================================================================
+local CIVIC_GRANT_TURN_PROPERTY = "ROSE_CIVIC_GRANT_TURN";
+local bGrantingCivic = false;
 
-	local pPlayer = Players[iPlayerID];
-	if not IsEligibleAIPlayer(pPlayer) then return false; end
-
-	local pCulture = pPlayer:GetCulture();
-	if pCulture == nil then return false; end
-
-	local bClearedAny = false;
-	for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
-		local iPolicy = pCulture:GetSlotPolicy(iSlot);
-		local kReplacement = tReplacements[iPolicy];
-		if kReplacement ~= nil then
-			pCulture:ClearPolicySlot(iSlot);
-			bClearedAny = true;
-			print("Rose AI: Cleared replaced policy "
-				.. kReplacement.oldPolicyType
-				.. " from slot " .. iSlot
-				.. " for AI player " .. iPlayerID
-				.. " when replacement " .. kReplacement.newPolicyType
-				.. " unlocked");
-		end
-	end
-
-	if bClearedAny then
-		-- Preserve the normal free policy-change state for this civic. This flag
-		-- does not choose a card; an open slot still has to be filled by CultureAI.
-		pCulture:SetCivicCompletedThisTurn(true);
-	end
-	return bClearedAny;
+local function GetCivicTypeName(iCivic)
+	local kCivic = GameInfo.Civics[iCivic];
+	return kCivic ~= nil and kCivic.CivicType or ("index " .. tostring(iCivic));
 end
 
--- Safety net for a replacement policy which reached the next AI turn while
--- its obsolete predecessor still occupies a slot. Great-Person-only expiry is
--- intentionally left to the base game because it is unrelated to this bug.
-local function ClearSlottedObsoleteReplacementPolicies(iPlayerID)
+-- Civics whose completion unlocks a government; CultureAI may change
+-- government when one completes.
+local tGovernmentCivics = {};
+for kGovernment in GameInfo.Governments() do
+	if kGovernment.PrereqCivic ~= nil then
+		local kCivic = GameInfo.Civics[kGovernment.PrereqCivic];
+		if kCivic ~= nil then tGovernmentCivics[kCivic.Index] = true; end
+	end
+end
+
+-- The civic in progress when it should complete this turn (one turn or less
+-- to go, as the civics tree shows it; AI_GovtPolicies.csv shows 1 on the turn
+-- before each completion), otherwise nil. Also nil when nothing is in
+-- progress or the query fails; a failure of both queries is printed once,
+-- since grants then never wait and the repair never runs on the AI's own
+-- civic.
+local bCivicQueryWarned = false;
+local function GetOwnCivicDueThisTurn(pCulture)
+	local iCivic = nil;
+	local bOk, iTurnsLeft = pcall(function()
+		iCivic = pCulture:GetProgressingCivic();
+		if type(iCivic) ~= "number" or iCivic < 0 then return nil; end
+		return pCulture:GetTurnsToProgressCivic(iCivic);
+	end);
+	if not bOk then
+		bOk, iTurnsLeft = pcall(function() return pCulture:GetTurnsLeftOnCurrentCivic(); end);
+		if not bOk and not bCivicQueryWarned then
+			bCivicQueryWarned = true;
+			print("Rose AI ERROR: Civic progress queries failed; grants will not wait for the AI's own civic: "
+				.. tostring(iTurnsLeft));
+		end
+	end
+	if not bOk or type(iTurnsLeft) ~= "number" or iTurnsLeft < 0 or iTurnsLeft > 1 then return nil; end
+	if type(iCivic) ~= "number" or iCivic < 0 then return -1; end -- due, civic unknown (fallback)
+	return iCivic;
+end
+
+-- The civic Rose would grant now and its kind, or nil.
+local function FindCivicToGrant(pCulture)
+	local iCivic = FindReadyGovtCivic(pCulture);
+	if iCivic ~= nil then return iCivic, "government"; end
+	iCivic = FindTreeFillCivic(pCulture);
+	if iCivic ~= nil then return iCivic, "tree-fill"; end
+	return nil, nil;
+end
+
+local function GrantOneCivic(iPlayerID, bOwnCivicDue)
+	if bGrantingCivic then return false; end
 	local pPlayer = Players[iPlayerID];
 	if not IsEligibleAIPlayer(pPlayer) then return false; end
+
+	local iTurn = Game.GetCurrentGameTurn();
+	if pPlayer:GetProperty(CIVIC_GRANT_TURN_PROPERTY) == iTurn then return false; end
 
 	local pCulture = pPlayer:GetCulture();
 	if pCulture == nil then return false; end
 
-	local bClearedAny = false;
-	for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
-		local iPolicy = pCulture:GetSlotPolicy(iSlot);
-		local kPolicy = iPolicy ~= nil and iPolicy >= 0
-			and GameInfo.Policies[iPolicy] or nil;
-		if kPolicy ~= nil
-			and tReplacementPolicyTypes[kPolicy.PolicyType] == true
-			and pCulture:IsPolicyObsolete(kPolicy.Hash) then
-			pCulture:ClearPolicySlot(iSlot);
-			bClearedAny = true;
-			print("Rose AI: Cleared stale obsolete replacement policy "
-				.. kPolicy.PolicyType
-				.. " from slot " .. iSlot
-				.. " for AI player " .. iPlayerID);
+	local iCivic, sKind = FindCivicToGrant(pCulture);
+	if iCivic == nil then return false; end
+
+	if bOwnCivicDue then
+		print("Rose AI: Deferred " .. sKind .. " civic " .. GetCivicTypeName(iCivic)
+			.. " for AI player " .. iPlayerID .. " turn " .. iTurn
+			.. ": its own civic completes this turn");
+		return false;
+	end
+
+	-- Record the turn before SetCivic so anything it re-enters sees it.
+	pPlayer:SetProperty(CIVIC_GRANT_TURN_PROPERTY, iTurn);
+	bGrantingCivic = true;
+	local bOk, sError = pcall(function() pCulture:SetCivic(iCivic, true); end);
+	bGrantingCivic = false;
+	if not bOk then
+		print("Rose AI ERROR: Civic grant failed player " .. iPlayerID
+			.. " turn " .. iTurn .. " civic " .. GetCivicTypeName(iCivic)
+			.. ": " .. tostring(sError));
+		return false;
+	end
+	print("Rose AI: Granted " .. sKind .. " civic " .. GetCivicTypeName(iCivic)
+		.. " to AI player " .. iPlayerID .. " turn " .. iTurn);
+	return true;
+end
+
+-- ============================================================================
+-- Dead policy card repair (HANDOFF W15)
+--
+-- A base-game bug leaves slotted policy cards without their modifiers, mostly
+-- when CultureAI re-commits its deck on a government-change turn. The card
+-- stays slotted and does nothing until a later deck change moves it to another
+-- slot; re-committing it in place never revived one. 25% of AI card-turns
+-- were dead in a game without Rose (.scratch/game-test-20261007-vanilla).
+--
+-- GameEffects is UI-only, so the InGame audit finds the dead cards and
+-- RoseAI.GetDeadPolicySlots passes them here. Each slot still holding a dead
+-- card is cleared, and CultureAI fills the open slots at its next deck commit.
+-- It commits only when a civic completes (in three test games no AI slotted a
+-- card on any other turn), so the repair clears just before one: on the turn
+-- the AI's own civic is due, or before a granted tree-fill civic. It never
+-- clears before a civic that unlocks a government (government changes are
+-- when cards die). In the 2026-10-08 test, clearing on other turns cut dead
+-- card-turns to 5% (from 22%), and the refilled cards were alive.
+-- POLICY_REPAIR_ON_COMMIT_TURN = false restores that tested timing (clear on
+-- a turn without a commit; the next civic refills), in case cards removed and
+-- re-added in one turn die again.
+-- A card is cleared at most POLICY_REPAIR_MAX_ATTEMPTS times in a row, then
+-- left alone for POLICY_REPAIR_BACKOFF_TURNS turns. The repair state is in
+-- player properties (sorted strings), so every machine decides alike; like
+-- the strength latches, it writes synchronized state (slot contents) from a
+-- UI-context reading.
+-- ============================================================================
+local POLICY_REPAIR_ON_COMMIT_TURN = true;
+local POLICY_REPAIR_MAX_ATTEMPTS = 3;
+local POLICY_REPAIR_BACKOFF_TURNS = 10;
+local POLICY_REPAIR_CLEAR_TURN = "ROSE_POLICY_REPAIR_CLEAR_TURN";
+local POLICY_REPAIR_ATTEMPTS = "ROSE_POLICY_REPAIR_ATTEMPTS";
+
+local function GetDeadPolicySlots(iPlayerID)
+	local kBridge = ExposedMembers.RoseAI;
+	if kBridge == nil or kBridge.GetDeadPolicySlots == nil then return nil; end
+	local bOk, tDead = pcall(kBridge.GetDeadPolicySlots, iPlayerID);
+	if not bOk or type(tDead) ~= "table" then return nil; end
+	return tDead;
+end
+
+-- Per-card attempts as "POLICY_X=attempts@lastTurn" entries, with a trailing
+-- "!" once the pause was printed; written sorted so the value is identical on
+-- every machine.
+local function ReadRepairAttempts(pPlayer)
+	local tAttempts = {};
+	local sValue = pPlayer:GetProperty(POLICY_REPAIR_ATTEMPTS);
+	if type(sValue) == "string" then
+		for sType, sCount, sLast, sFlag in string.gmatch(sValue, "([%w_]+)=(%d+)@(%-?%d+)(!?)") do
+			tAttempts[sType] = { Attempts = tonumber(sCount), LastTurn = tonumber(sLast), Reported = sFlag == "!" };
+		end
+	end
+	return tAttempts;
+end
+
+local function WriteRepairAttempts(pPlayer, tAttempts)
+	local tParts = {};
+	for sType, kTry in pairs(tAttempts) do
+		table.insert(tParts, sType .. "=" .. kTry.Attempts .. "@" .. kTry.LastTurn
+			.. (kTry.Reported and "!" or ""));
+	end
+	table.sort(tParts);
+	pPlayer:SetProperty(POLICY_REPAIR_ATTEMPTS, table.concat(tParts, ";"));
+end
+
+-- sRefill names what refills the slots, for the log.
+local function RepairDeadPolicies(iPlayerID, sRefill)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return false; end
+	local pCulture = pPlayer:GetCulture();
+	if pCulture == nil then return false; end
+	local iTurn = Game.GetCurrentGameTurn();
+	if pPlayer:GetProperty(POLICY_REPAIR_CLEAR_TURN) == iTurn then return false; end
+
+	local tDead = GetDeadPolicySlots(iPlayerID);
+	if tDead == nil then return false; end
+
+	local tAttempts = ReadRepairAttempts(pPlayer);
+	local tDeadNow = {};
+	for _, kDead in ipairs(tDead) do tDeadNow[kDead.PolicyType] = true; end
+	for sPolicyType in pairs(tAttempts) do
+		if not tDeadNow[sPolicyType] then tAttempts[sPolicyType] = nil; end
+	end
+
+	local iCleared = 0;
+	for _, kDead in ipairs(tDead) do
+		local kPolicy = GameInfo.Policies[kDead.PolicyType];
+		local kTry = tAttempts[kDead.PolicyType];
+		if kTry ~= nil and kTry.Attempts >= POLICY_REPAIR_MAX_ATTEMPTS then
+			if iTurn - kTry.LastTurn >= POLICY_REPAIR_BACKOFF_TURNS then
+				kTry.Attempts = 0;
+				kTry.Reported = false;
+			elseif not kTry.Reported then
+				kTry.Reported = true;
+				print("Rose AI: Policy repair paused for " .. kDead.PolicyType
+					.. " for AI player " .. iPlayerID .. " turn " .. iTurn
+					.. " after " .. kTry.Attempts .. " attempts; next try turn "
+					.. (kTry.LastTurn + POLICY_REPAIR_BACKOFF_TURNS));
+			end
+		end
+		-- Re-check the slot against gameplay data: the reading comes from the
+		-- UI context and may be from earlier in the turn.
+		if kPolicy ~= nil and type(kDead.Slot) == "number"
+			and (kTry == nil or kTry.Attempts < POLICY_REPAIR_MAX_ATTEMPTS)
+			and pCulture:GetSlotPolicy(kDead.Slot) == kPolicy.Index then
+			local bOk, sError = pcall(function() pCulture:ClearPolicySlot(kDead.Slot); end);
+			if bOk then
+				if kTry == nil then
+					kTry = { Attempts = 0, Reported = false };
+					tAttempts[kDead.PolicyType] = kTry;
+				end
+				kTry.Attempts = kTry.Attempts + 1;
+				kTry.LastTurn = iTurn;
+				kTry.Reported = false;
+				iCleared = iCleared + 1;
+				print("Rose AI: Policy repair cleared dead " .. kDead.PolicyType
+					.. " from slot " .. kDead.Slot .. " for AI player " .. iPlayerID
+					.. " turn " .. iTurn .. " attempt " .. kTry.Attempts
+					.. " missing modifiers " .. tostring(kDead.Missing));
+			else
+				print("Rose AI ERROR: Policy repair could not clear " .. kDead.PolicyType
+					.. " slot " .. kDead.Slot .. " player " .. iPlayerID .. ": " .. tostring(sError));
+			end
+		end
+	end
+	WriteRepairAttempts(pPlayer, tAttempts);
+	if iCleared == 0 then return false; end
+
+	pPlayer:SetProperty(POLICY_REPAIR_CLEAR_TURN, iTurn);
+	print("Rose AI: Policy repair for AI player " .. iPlayerID .. " turn " .. iTurn
+		.. " cleared " .. iCleared .. " slots, refill by " .. sRefill);
+	return true;
+end
+
+-- Repair dead cards, then grant at most one civic. The repair runs first so
+-- that a grant's own deck commit can refill the cleared slots.
+local function GrantCivicOrRepairPolicies(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return; end
+	local pCulture = pPlayer:GetCulture();
+	if pCulture == nil then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+
+	local iOwnCivic = GetOwnCivicDueThisTurn(pCulture);
+	local bOwnCivicDue = iOwnCivic ~= nil;
+	local iGrant, sGrantKind = FindCivicToGrant(pCulture);
+	local bGrantDue = iGrant ~= nil and not bOwnCivicDue and not bGrantingCivic
+		and pPlayer:GetProperty(CIVIC_GRANT_TURN_PROPERTY) ~= iTurn;
+
+	local sRefill = nil;
+	if POLICY_REPAIR_ON_COMMIT_TURN then
+		if bOwnCivicDue then
+			-- An unknown civic (fallback query) might unlock a government.
+			if iOwnCivic >= 0 and not tGovernmentCivics[iOwnCivic] then
+				sRefill = "its own civic " .. GetCivicTypeName(iOwnCivic) .. " this turn";
+			end
+		elseif bGrantDue and sGrantKind == "tree-fill" then
+			sRefill = "the granted civic " .. GetCivicTypeName(iGrant) .. " this turn";
+		end
+	elseif not bOwnCivicDue and not bGrantDue then
+		sRefill = "its next civic";
+	end
+	if sRefill ~= nil then
+		local bOk, sError = pcall(RepairDeadPolicies, iPlayerID, sRefill);
+		if not bOk then
+			print("Rose AI ERROR: Policy repair failed player "
+				.. tostring(iPlayerID) .. ": " .. tostring(sError));
 		end
 	end
 
-	if bClearedAny then
-		pCulture:SetCivicCompletedThisTurn(true);
+	local bOk, sError = pcall(GrantOneCivic, iPlayerID, bOwnCivicDue);
+	if not bOk then
+		print("Rose AI ERROR: Civic grant failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
 	end
-	return bClearedAny;
 end
 
 -- ============================================================================
@@ -459,7 +639,7 @@ end
 local function ForbidUnlessActive(fnActive, iPlayerID, iThreshold)
 	local bOk, bActive = pcall(fnActive, iPlayerID, iThreshold);
 	if not bOk then
-		print("Rose AI ERROR: War strategy check failed player "
+		print("Rose AI ERROR: Strategy check failed player "
 			.. tostring(iPlayerID) .. ": " .. tostring(bActive));
 		return true;
 	end
@@ -475,6 +655,132 @@ tForbidStrategy.RoseForbidStrategyMilitaryRecovery = function(iPlayerID, iThresh
 end
 tForbidStrategy.RoseForbidStrategyWarAdvantage = function(iPlayerID, iThreshold)
 	return ForbidUnlessActive(RoseActiveStrategyWarAdvantage, iPlayerID, iThreshold);
+end
+
+-- ============================================================================
+-- Austerity latch
+--
+-- A modest income nudge for an AI whose treasury is running dry. It only
+-- enables two strategies whose lists shift priorities toward income; it never
+-- touches units, operations, or the treasury. Same latch layout as the war
+-- strategies: player properties written only from PlayerTurnStarted, read by
+-- the Forbidden condition callbacks. Entry and release bands are far apart so
+-- the strategy does not flap against the engine's 20-turn hold and cooldown.
+--
+-- The Gold balance is read in gameplay; net income (gross Gold yield minus
+-- total maintenance, as the top panel shows it) only through the InGame
+-- bridge. An invalid income reading leaves the latch and counters unchanged.
+-- The turn property stops a second PlayerTurnStarted in one game turn from
+-- counting the same turn twice.
+-- ============================================================================
+local AUSTERITY_ENTER_BALANCE = 30;      -- enter below this balance
+local AUSTERITY_ENTER_NEG_TURNS = 2;     -- after this many negative-income turns
+local AUSTERITY_RELEASE_BALANCE = 100;   -- release above this balance
+local AUSTERITY_RELEASE_POS_TURNS = 3;   -- after this many positive-income turns
+-- An AI that keeps spending its Gold may never bank 100; sustained positive
+-- income alone also releases, so the latch cannot stay on for good.
+local AUSTERITY_RELEASE_SUSTAINED_POS_TURNS = 10;
+local AUSTERITY_LATCH = "ROSE_AUSTERITY_LATCH";
+local AUSTERITY_NEG_TURNS = "ROSE_AUSTERITY_NEG_TURNS";
+local AUSTERITY_POS_TURNS = "ROSE_AUSTERITY_POS_TURNS";
+local AUSTERITY_TURN = "ROSE_AUSTERITY_TURN";
+
+local function GetNetGoldIncome(iPlayerID)
+	local kBridge = ExposedMembers.RoseAI;
+	if kBridge == nil or kBridge.GetNetGoldIncome == nil then return nil; end
+	local iIncome = kBridge.GetNetGoldIncome(iPlayerID);
+	if type(iIncome) ~= "number" or iIncome ~= iIncome then return nil; end
+	return iIncome;
+end
+
+local function SetCounter(pPlayer, sProperty, iValue)
+	local iOld = pPlayer:GetProperty(sProperty);
+	if iOld ~= iValue and not (iOld == nil and iValue == 0) then
+		pPlayer:SetProperty(sProperty, iValue);
+	end
+end
+
+local function UpdateAusterityLatch(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if pPlayer == nil then return; end
+	if not IsEligibleAIPlayer(pPlayer) then
+		-- Clear any state left from a period when this slot was an eligible AI.
+		SetLatch(pPlayer, AUSTERITY_LATCH, false);
+		SetCounter(pPlayer, AUSTERITY_NEG_TURNS, 0);
+		SetCounter(pPlayer, AUSTERITY_POS_TURNS, 0);
+		return;
+	end
+
+	local iTurn = Game.GetCurrentGameTurn();
+	if pPlayer:GetProperty(AUSTERITY_TURN) == iTurn then return; end
+
+	local pTreasury = pPlayer:GetTreasury();
+	local iBalance = pTreasury ~= nil and pTreasury:GetGoldBalance() or nil;
+	local iIncome = GetNetGoldIncome(iPlayerID);
+	if type(iBalance) ~= "number" or iIncome == nil then return; end
+
+	local iNeg = iIncome < 0 and (pPlayer:GetProperty(AUSTERITY_NEG_TURNS) or 0) + 1 or 0;
+	local iPos = iIncome > 0 and (pPlayer:GetProperty(AUSTERITY_POS_TURNS) or 0) + 1 or 0;
+	pPlayer:SetProperty(AUSTERITY_TURN, iTurn);
+	SetCounter(pPlayer, AUSTERITY_NEG_TURNS, iNeg);
+	SetCounter(pPlayer, AUSTERITY_POS_TURNS, iPos);
+
+	local bWasActive = pPlayer:GetProperty(AUSTERITY_LATCH) == 1;
+	local bActive = bWasActive;
+	if not bWasActive then
+		bActive = iBalance < AUSTERITY_ENTER_BALANCE
+			and iNeg >= AUSTERITY_ENTER_NEG_TURNS;
+	else
+		bActive = not ((iBalance > AUSTERITY_RELEASE_BALANCE
+				and iPos >= AUSTERITY_RELEASE_POS_TURNS)
+			or iPos >= AUSTERITY_RELEASE_SUSTAINED_POS_TURNS);
+	end
+	if bActive ~= bWasActive then
+		SetLatch(pPlayer, AUSTERITY_LATCH, bActive);
+		print("Rose AI: Austerity latch " .. (bActive and "entered" or "released")
+			.. " player " .. iPlayerID
+			.. " turn " .. iTurn
+			.. " balance " .. math.floor(iBalance)
+			.. " income " .. string.format("%.1f", iIncome)
+			.. " negTurns " .. iNeg
+			.. " posTurns " .. iPos);
+	end
+end
+
+local tAusterityStrategyState = {};
+local function LogAusterityStrategyChange(iPlayerID, sStrategy, bActive, iWars)
+	local sKey = tostring(iPlayerID) .. ":" .. sStrategy;
+	if tAusterityStrategyState[sKey] == bActive then return; end
+	tAusterityStrategyState[sKey] = bActive;
+	local pPlayer = Players[iPlayerID];
+	print("Rose AI: Austerity strategy " .. sStrategy
+		.. " player " .. iPlayerID
+		.. " active " .. tostring(bActive)
+		.. (iWars ~= nil and (" wars " .. iWars) or "")
+		.. " latch " .. tostring(IsLatched(iPlayerID, AUSTERITY_LATCH))
+		.. " negTurns " .. tostring(pPlayer ~= nil and pPlayer:GetProperty(AUSTERITY_NEG_TURNS) or nil)
+		.. " posTurns " .. tostring(pPlayer ~= nil and pPlayer:GetProperty(AUSTERITY_POS_TURNS) or nil));
+end
+
+function RoseActiveStrategyAusterity(iPlayerID, iThreshold)
+	local bActive = IsLatched(iPlayerID, AUSTERITY_LATCH);
+	LogAusterityStrategyChange(iPlayerID, "AUSTERITY", bActive, nil);
+	return bActive;
+end
+
+function RoseActiveStrategyAusterityAtWar(iPlayerID, iThreshold)
+	local iWars = GetMajorWarContext(iPlayerID);
+	local bActive = iWars > 0 and IsLatched(iPlayerID, AUSTERITY_LATCH);
+	LogAusterityStrategyChange(iPlayerID, "AUSTERITY_AT_WAR", bActive, iWars);
+	return bActive;
+end
+
+-- Filled in only after everything above has loaded; see RegisterForbidCallback.
+tForbidStrategy.RoseForbidStrategyAusterity = function(iPlayerID, iThreshold)
+	return ForbidUnlessActive(RoseActiveStrategyAusterity, iPlayerID, iThreshold);
+end
+tForbidStrategy.RoseForbidStrategyAusterityAtWar = function(iPlayerID, iThreshold)
+	return ForbidUnlessActive(RoseActiveStrategyAusterityAtWar, iPlayerID, iThreshold);
 end
 
 local function GetAliveCityOwners()
@@ -650,34 +956,155 @@ local function TryStartNavalSuperiority(iPlayerID)
 	end
 end
 
--- Hook: fires whenever any player completes a civic (gameplay event).
-function OnCivicCompleted(iPlayerID, iCivicID)
-	ClearPoliciesReplacedByCivic(iPlayerID, iCivicID);
-	GrantReadyGovtCivics(iPlayerID);
-	GrantTreeFillCivics(iPlayerID);
-	-- SetCivic grants are not guaranteed to emit another completion callback.
-	ClearSlottedObsoleteReplacementPolicies(iPlayerID);
+-- ============================================================================
+-- Stuck Trader diagnostic (HANDOFF W14 item 2). Print-only.
+--
+-- AI Traders have sat in a city for many turns logging "Can't Start" on
+-- MAKE_TRADE_ROUTE. The unit operation's CanStart also checks moves remaining
+-- and the unit's operation queue, which the route planner skips. For each
+-- eligible AI's Trader that has been on the same plot for at least
+-- TRADER_STREAK_REPORT consecutive turn starts, print one line per hook call
+-- with its moves and the city on its plot, plus route/activity details from
+-- the InGame bridge (those queries are only verified in UI scripts). Print
+-- once when such a streak ends. The streak table is local and is not saved,
+-- so streaks restart after a reload.
+-- ============================================================================
+local TRADER_STREAK_REPORT = 3;
+local tTraderUnitTypes = {};
+for kUnit in GameInfo.Units() do
+	if kUnit.MakeTradeRoute == true or kUnit.MakeTradeRoute == 1 then
+		tTraderUnitTypes[kUnit.Index] = true;
+	end
+end
+local tTraderStreaks = {};
+
+local function DescribePlotCity(iX, iY)
+	local pCity = CityManager.GetCityAt(iX, iY);
+	if pCity == nil then return "none"; end
+	return tostring(pCity:GetOwner()) .. "/" .. tostring(pCity:GetID())
+		.. "/" .. tostring(pCity:GetName());
 end
 
--- Grant ready civics, then reconcile policies made obsolete by the grants.
+local function GetTraderBridgeDetails(iPlayerID, iUnitID, iX, iY)
+	local kBridge = ExposedMembers.RoseAI;
+	if kBridge == nil or kBridge.GetTraderDiagnostics == nil then return "bridge n/a"; end
+	local bOk, sDetails = pcall(kBridge.GetTraderDiagnostics, iPlayerID, iUnitID, iX, iY);
+	if not bOk then return "bridge error " .. tostring(sDetails); end
+	return tostring(sDetails);
+end
+
+local function LogTraderStreak(iPlayerID, iTurn, sHook, pUnit, kStreak)
+	local iX, iY = pUnit:GetX(), pUnit:GetY();
+	print("Rose AI: Trader stuck player " .. iPlayerID
+		.. " turn " .. iTurn
+		.. " hook " .. sHook
+		.. " unit " .. pUnit:GetID()
+		.. " plot " .. iX .. "," .. iY
+		.. " city " .. DescribePlotCity(iX, iY)
+		.. " moves " .. tostring(pUnit:GetMovesRemaining())
+		.. "/" .. tostring(pUnit:GetMaxMoves())
+		.. " streak " .. kStreak.Streak
+		.. " operation " .. GetUnitOperationName(pUnit)
+		.. " " .. GetTraderBridgeDetails(iPlayerID, pUnit:GetID(), iX, iY));
+end
+
+local function LogTraderStreakEnd(iPlayerID, iTurn, sHook, iUnitID, kStreak, sReason)
+	print("Rose AI: Trader streak ended player " .. iPlayerID
+		.. " turn " .. iTurn
+		.. " hook " .. sHook
+		.. " unit " .. iUnitID
+		.. " plot " .. kStreak.X .. "," .. kStreak.Y
+		.. " streak " .. kStreak.Streak
+		.. " reason " .. sReason);
+end
+
+local function UpdateTraderStreaks(iPlayerID, sHook)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then
+		tTraderStreaks[iPlayerID] = nil;
+		return;
+	end
+	local iTurn = Game.GetCurrentGameTurn();
+	local tStreaks = tTraderStreaks[iPlayerID];
+	if tStreaks == nil then
+		tStreaks = {};
+		tTraderStreaks[iPlayerID] = tStreaks;
+	end
+
+	local tSeen = {};
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		if tTraderUnitTypes[pUnit:GetType()] == true then
+			local iUnitID = pUnit:GetID();
+			local iX, iY = pUnit:GetX(), pUnit:GetY();
+			tSeen[iUnitID] = true;
+			local kStreak = tStreaks[iUnitID];
+			if kStreak ~= nil and (kStreak.X ~= iX or kStreak.Y ~= iY) then
+				if kStreak.Streak >= TRADER_STREAK_REPORT then
+					LogTraderStreakEnd(iPlayerID, iTurn, sHook, iUnitID, kStreak, "moved");
+				end
+				kStreak = nil;
+			end
+			if kStreak == nil then
+				kStreak = { X = iX, Y = iY, Streak = 1, Turn = iTurn, Printed = {} };
+				tStreaks[iUnitID] = kStreak;
+			elseif kStreak.Turn ~= iTurn then
+				-- Count each game turn once, however many hooks fire in it.
+				kStreak.Streak = kStreak.Streak + 1;
+				kStreak.Turn = iTurn;
+			end
+			if kStreak.Streak >= TRADER_STREAK_REPORT and kStreak.Printed[sHook] ~= iTurn then
+				kStreak.Printed[sHook] = iTurn;
+				LogTraderStreak(iPlayerID, iTurn, sHook, pUnit, kStreak);
+			end
+		end
+	end
+	for iUnitID, kStreak in pairs(tStreaks) do
+		if not tSeen[iUnitID] then
+			if kStreak.Streak >= TRADER_STREAK_REPORT then
+				LogTraderStreakEnd(iPlayerID, iTurn, sHook, iUnitID, kStreak, "gone");
+			end
+			tStreaks[iUnitID] = nil;
+		end
+	end
+end
+
+local function RunTraderDiagnostic(iPlayerID, sHook)
+	if not ROSE_VERBOSE_LOGS then return; end
+	local bOk, sError = pcall(UpdateTraderStreaks, iPlayerID, sHook);
+	if not bOk then
+		print("Rose AI ERROR: Trader diagnostic failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
+end
+
+-- Update latches, then grant at most one ready civic or repair dead policy
+-- cards.
 function OnPlayerTurnStarted(iPlayerID)
-    local bOk, sError = pcall(UpdateWarStrategyLatches, iPlayerID);
-    if not bOk then
-        print("Rose AI ERROR: War strategy latch update failed player "
-            .. tostring(iPlayerID) .. ": " .. tostring(sError));
-    end
-    GrantReadyGovtCivics(iPlayerID);
-    GrantTreeFillCivics(iPlayerID);
-    ClearSlottedObsoleteReplacementPolicies(iPlayerID);
+	local bOk, sError = pcall(UpdateWarStrategyLatches, iPlayerID);
+	if not bOk then
+		print("Rose AI ERROR: War strategy latch update failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
+	bOk, sError = pcall(UpdateAusterityLatch, iPlayerID);
+	if not bOk then
+		print("Rose AI ERROR: Austerity latch update failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
+	bOk, sError = pcall(GrantCivicOrRepairPolicies, iPlayerID);
+	if not bOk then
+		print("Rose AI ERROR: Civic grant or policy repair failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
+	RunTraderDiagnostic(iPlayerID, "PlayerTurnStarted");
 end
 
 -- Firaxis' Nubia scenario starts scripted military operations from this hook.
 -- Starting them inside PlayerTurnStarted can re-enter native AI initialization.
 function OnPlayerTurnStartComplete(iPlayerID)
+	RunTraderDiagnostic(iPlayerID, "PlayerTurnStartComplete");
 	TryStartNavalSuperiority(iPlayerID);
 end
 
-GameEvents.OnCivicCulturevated.Add(OnCivicCompleted);
 GameEvents.PlayerTurnStarted.Add(OnPlayerTurnStarted);
 GameEvents.PlayerTurnStartComplete.Add(OnPlayerTurnStartComplete);
 

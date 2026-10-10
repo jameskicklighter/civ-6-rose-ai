@@ -1468,7 +1468,8 @@ local function GetNuclearDeliveryUnits(pPlayer, iStrikeRange)
 		if kDelivery ~= nil then
 			if kDelivery.Air then iAircraft = iAircraft + 1; end
 			table.insert(tUnits, { Unit = pUnit, Air = kDelivery.Air,
-				Range = kDelivery.Naval and iStrikeRange or kDelivery.Range });
+				Range = kDelivery.Naval and iStrikeRange or kDelivery.Range,
+				Damage = pUnit.GetDamage ~= nil and (pUnit:GetDamage() or 0) or 0 });
 		end
 	end
 	local tUsable = {};
@@ -1564,36 +1565,51 @@ local function FindNuclearTarget(pPlayer, tSince, iTurn, iRadius, iStrikeRange)
 			local bOperation = HasOperationAgainst(pPlayer, iOwner);
 			for _, pCity in pOwner:GetCities():Members() do
 				local iX, iY = pCity:GetX(), pCity:GetY();
-				-- Closest unit in range that is itself outside the blast.
-				local kUnit, iUnitDistance = nil, nil;
+				-- Units in range that are themselves outside the blast: the least
+				-- damaged first (W20 step 4; a damaged unit can still fire, so
+				-- damage alone never rules one out), then the closest, then unit
+				-- order.
+				local tCandidates = {};
 				if pVisibility:IsRevealed(iX, iY) then
-					for _, kDelivery in ipairs(tDelivery) do
+					for iIndex, kDelivery in ipairs(tDelivery) do
 						local iDistance = Map.GetPlotDistance(
 							kDelivery.Unit:GetX(), kDelivery.Unit:GetY(), iX, iY);
-						if iDistance <= kDelivery.Range and iDistance > iRadius
-							and (kUnit == nil or iDistance < iUnitDistance) then
-							kUnit, iUnitDistance = kDelivery, iDistance;
+						if iDistance <= kDelivery.Range and iDistance > iRadius then
+							table.insert(tCandidates, { Delivery = kDelivery, Distance = iDistance, Index = iIndex });
 						end
 					end
 				end
-				if kUnit ~= nil then
+				table.sort(tCandidates, function(a, b)
+					if a.Delivery.Damage ~= b.Delivery.Damage then return a.Delivery.Damage < b.Delivery.Damage; end
+					if a.Distance ~= b.Distance then return a.Distance < b.Distance; end
+					return a.Index < b.Index;
+				end);
+				if #tCandidates > 0 then
 					iInRange = iInRange + 1;
 				end
-				if kUnit ~= nil and tRecent[iX .. "," .. iY] then
+				-- The first candidate whose launch leaves no other unit of ours
+				-- inside the margin (the launcher is outside the blast).
+				local kUnit = nil;
+				if #tCandidates > 0 and not tRecent[iX .. "," .. iY]
+					and CountPlotsWithin(tProtectedCities, iX, iY, iMaxBlastRadius) == 0 then
+					for _, kCandidate in ipairs(tCandidates) do
+						if CountPlotsWithin(tOwnUnits, iX, iY, iUnitSafe, kCandidate.Delivery.Unit:GetID()) == 0 then
+							kUnit = kCandidate.Delivery;
+							break;
+						end
+					end
+				end
+				if #tCandidates > 0 and tRecent[iX .. "," .. iY] then
 					iRecentSkipped = iRecentSkipped + 1;
 				elseif kUnit ~= nil then
-					local iDeliveryID = kUnit.Unit:GetID();
-					if CountPlotsWithin(tOwnUnits, iX, iY, iUnitSafe, iDeliveryID) == 0
-						and CountPlotsWithin(tProtectedCities, iX, iY, iMaxBlastRadius) == 0 then
-						local iBesiegers = CountPlotsWithin(tLandUnits, iX, iY, iSiegeReach);
-						local iPopulation = pCity:GetPopulation();
-						if kBest == nil
-							or (bOperation and not kBest.Operation)
-							or (bOperation == kBest.Operation and (iBesiegers > kBest.Besiegers
-								or (iBesiegers == kBest.Besiegers and iPopulation > kBest.Population))) then
-							kBest = { City = pCity, Owner = iOwner, Delivery = kUnit, Operation = bOperation,
-								Besiegers = iBesiegers, Population = iPopulation };
-						end
+					local iBesiegers = CountPlotsWithin(tLandUnits, iX, iY, iSiegeReach);
+					local iPopulation = pCity:GetPopulation();
+					if kBest == nil
+						or (bOperation and not kBest.Operation)
+						or (bOperation == kBest.Operation and (iBesiegers > kBest.Besiegers
+							or (iBesiegers == kBest.Besiegers and iPopulation > kBest.Population))) then
+						kBest = { City = pCity, Owner = iOwner, Delivery = kUnit, Operation = bOperation,
+							Besiegers = iBesiegers, Population = iPopulation };
 					end
 				end
 			end
@@ -1693,6 +1709,7 @@ local function TryNuclearStrike(iPlayerID)
 		.. " with unit " .. pUnit:GetID()
 		.. " " .. (kUnitInfo ~= nil and kUnitInfo.UnitType or "?")
 		.. " at (" .. pUnit:GetX() .. "," .. pUnit:GetY() .. ")"
+		.. " damage " .. kTarget.Delivery.Damage
 		.. " range " .. kTarget.Delivery.Range
 		.. " operation " .. iOperationID
 		.. " devices " .. iDevices .. " blast radius " .. iRadius

@@ -25,7 +25,8 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseClassicalDistricts'),
 ('RoseMedievalDistricts'),
 ('RoseRenaissanceDistricts'),
--- This era or later (cumulative strategy, AI_Strategies.sql)
+-- This era or later (cumulative strategies, AI_Strategies.sql)
+('RoseRenaissanceOnwardDistricts'),
 ('RoseModernOnwardDistricts'),
 -- Always-on districts (all major civs)
 ('RoseMajorCivDistricts'),
@@ -57,6 +58,7 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseClassicalDistricts',    'Districts'),
 ('RoseMedievalDistricts',     'Districts'),
 ('RoseRenaissanceDistricts',  'Districts'),
+('RoseRenaissanceOnwardDistricts', 'Districts'),
 ('RoseModernOnwardDistricts', 'Districts');
 
 -- Always-on — tied to TRAIT_LEADER_MAJOR_CIV
@@ -90,7 +92,8 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_CLASSICAL_CHANGES',    'RoseClassicalDistricts'),
 ('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalDistricts'),
 ('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceDistricts'),
--- Cumulative "era or later" strategy, defined in AI_Strategies.sql.
+-- Cumulative "era or later" strategies, defined in AI_Strategies.sql.
+('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'RoseRenaissanceOnwardDistricts'),
 ('STRATEGY_ROSE_MODERN_ONWARD',   'RoseModernOnwardDistricts');
 
 -- ============================================================================
@@ -105,6 +108,12 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- Industrial Zone in Medieval/Renaissance
 ('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1, 100),
 ('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1, 100),
+-- Campus from the Renaissance era on (W26, James 2026-10-10). The favored
+-- districts above fill the early slots and section 1 drops the base Classical
+-- Campus favor, so Rose AIs built Campuses in 3-4% of their district
+-- contracts over three 174-199 turn games (vanilla 24%). The opening is left
+-- growth-first; the second wave of districts should now include one.
+('RoseRenaissanceOnwardDistricts', 'DISTRICT_CAMPUS',     1, 50),
 -- Aerodrome from the Modern era (Flight). No base list favors it; AIs chose
 -- 2-4 per civ by turn 200, none for 2 of 8 (2026-10-09 test). Air combat
 -- demand is raised on the same strategy (AI_Yields.sql).

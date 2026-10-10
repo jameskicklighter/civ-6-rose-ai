@@ -25,7 +25,7 @@ Applied here:
 - Nuclear Assault: base contract-link fix, no strength requirement,
   priority 4 (the highest the AI ticks), and one stolen delivery unit.
 - New Rose Nuclear Strike operation: one Lua-added delivery unit, no Recruit
-  node, fixed target (started only by Rose_AI_Gameplay.lua).
+  or Defend Units node, fixed target (started only by Rose_AI_Gameplay.lua).
 - Wartime assaults retyped to their own slot type; lower wartime walled odds.
 - City Defense typed OP_DEFENSE (limited to 3 at once) with a 3-unit cap.
 
@@ -720,10 +720,15 @@ Not applied here:
   Fleet Op (PiratesScenario_AI.xml). AllowTargetUpdate 0 keeps it on the
   ordered city, which passed Rose's friendly-fire margin.
   The tree is the base Nuclear Assault tree (base node data copied) without
-  nodes 6-9 and 12-14, plus a Turn Limiter:
-    Sequence [Decode Trigger, Operation Defend Units, Concurrent [Will use
-    nukes, Sequence [Lock Units, Turn Limiter [Concurrent [Operation Launch
-    nuke, Operation Move]]]]]
+  nodes 2 and 6-9 and 12-14, plus a Turn Limiter:
+    Sequence [Decode Trigger, Concurrent [Will use nukes, Sequence [Lock
+    Units, Turn Limiter [Concurrent [Operation Launch nuke, Operation
+    Move]]]]]
+  No Operation Defend Units (W20 step 4, 2026-10-10): with AutoProtect 20 it
+  gave a damaged delivery unit a protect command (Fortify, a move or a
+  promotion) in the launch tick, which spent the unit's turn, and the strike
+  could not start (three Norway orders, 0 launches, in the 20261010b game).
+  A one-tick operation whose one unit must act this tick has nothing to defend.
   The operation must end after its launch tick. In 20261009b the engine's
   Launch nuke returned SUCCESS on every launch tick (even when each strike
   read "Can't Start") while Operation Move stayed RUNNING, so the base
@@ -755,17 +760,16 @@ Not applied here:
     <Row TreeName="Rose Nuclear Strike" />
   </BehaviorTrees>
   <BehaviorTreeNodes>
-    <Row NodeType="Sequence" NodeId="0" TreeName="Rose Nuclear Strike" JumpTo="11" />
+    <Row NodeType="Sequence" NodeId="0" TreeName="Rose Nuclear Strike" JumpTo="10" />
       <Row NodeType="Decode Trigger" NodeId="1" TreeName="Rose Nuclear Strike" />
-      <Row NodeType="Operation Defend Units" NodeId="2" TreeName="Rose Nuclear Strike" />
-      <Row NodeType="Concurrent" NodeId="3" TreeName="Rose Nuclear Strike" JumpTo="11" />
-        <Row NodeType="Will use nukes" NodeId="4" TreeName="Rose Nuclear Strike" />
-        <Row NodeType="Sequence" NodeId="5" TreeName="Rose Nuclear Strike" JumpTo="11" />
-          <Row NodeType="Lock Units" NodeId="6" TreeName="Rose Nuclear Strike" />
-          <Row NodeType="Turn Limiter" NodeId="7" TreeName="Rose Nuclear Strike" JumpTo="11" />
-            <Row NodeType="Concurrent" NodeId="8" TreeName="Rose Nuclear Strike" JumpTo="11" />
-              <Row NodeType="Operation Launch nuke" NodeId="9" TreeName="Rose Nuclear Strike" />
-              <Row NodeType="Operation Move" NodeId="10" TreeName="Rose Nuclear Strike" />
+      <Row NodeType="Concurrent" NodeId="2" TreeName="Rose Nuclear Strike" JumpTo="10" />
+        <Row NodeType="Will use nukes" NodeId="3" TreeName="Rose Nuclear Strike" />
+        <Row NodeType="Sequence" NodeId="4" TreeName="Rose Nuclear Strike" JumpTo="10" />
+          <Row NodeType="Lock Units" NodeId="5" TreeName="Rose Nuclear Strike" />
+          <Row NodeType="Turn Limiter" NodeId="6" TreeName="Rose Nuclear Strike" JumpTo="10" />
+            <Row NodeType="Concurrent" NodeId="7" TreeName="Rose Nuclear Strike" JumpTo="10" />
+              <Row NodeType="Operation Launch nuke" NodeId="8" TreeName="Rose Nuclear Strike" />
+              <Row NodeType="Operation Move" NodeId="9" TreeName="Rose Nuclear Strike" />
   </BehaviorTreeNodes>
   <TreeData>
     <!-- Base node 1, Decode Trigger. -->
@@ -778,21 +782,19 @@ Not applied here:
     <Row DefnId="6" NodeId="1" TreeName="Rose Nuclear Strike" />
     <Row DefnId="7" NodeId="1" TreeName="Rose Nuclear Strike" />
     <Row DefnId="8" NodeId="1" TreeName="Rose Nuclear Strike" Tag="Present Value" />
-    <!-- Base node 2, Operation Defend Units (AutoProtect Percentage). -->
-    <Row DefnId="0" NodeId="2" TreeName="Rose Nuclear Strike" DefaultData="20" />
     <!-- Base node 10, Lock Units (lock, signal readiness). -->
-    <Row DefnId="0" NodeId="6" TreeName="Rose Nuclear Strike" DefaultData="true" />
-    <Row DefnId="1" NodeId="6" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <Row DefnId="0" NodeId="5" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <Row DefnId="1" NodeId="5" TreeName="Rose Nuclear Strike" DefaultData="true" />
     <!-- Turn Limiter: Turns to Run 4 (fails near count 2), Fail at Limit ends the operation. -->
-    <Row DefnId="0" NodeId="7" TreeName="Rose Nuclear Strike" DefaultData="4" />
-    <Row DefnId="1" NodeId="7" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <Row DefnId="0" NodeId="6" TreeName="Rose Nuclear Strike" DefaultData="4" />
+    <Row DefnId="1" NodeId="6" TreeName="Rose Nuclear Strike" DefaultData="true" />
     <!-- Concurrent: Exit on Success, so the launch tick ends the operation. -->
-    <Row DefnId="1" NodeId="8" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <Row DefnId="1" NodeId="7" TreeName="Rose Nuclear Strike" DefaultData="true" />
     <!-- Base node 15, Operation Move. -->
-    <Row DefnId="0" NodeId="10" TreeName="Rose Nuclear Strike" DefaultData="1" />
-    <Row DefnId="1" NodeId="10" TreeName="Rose Nuclear Strike" DefaultData="4" />
-    <Row DefnId="2" NodeId="10" TreeName="Rose Nuclear Strike" DefaultData="1" />
-    <Row DefnId="3" NodeId="10" TreeName="Rose Nuclear Strike" DefaultData="2" />
+    <Row DefnId="0" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="1" />
+    <Row DefnId="1" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="4" />
+    <Row DefnId="2" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="1" />
+    <Row DefnId="3" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="2" />
   </TreeData>
   <AiOperationDefs>
     <Row OperationName="Rose Nuclear Strike" TargetType="TARGET_ENEMY_COMBAT_DISTRICT" TargetParameter="1"

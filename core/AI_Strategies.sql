@@ -163,7 +163,7 @@ INSERT OR REPLACE INTO AiFavoredItems
 -- declaration, so it fails its pre-war limiter and may restart on that target,
 -- holding the planned slot (the wartime slot is unaffected).
 ('RoseAtWarDiplomacy', 'DIPLOACTION_DECLARE_WAR_MINOR_CIV',      0,   0),
--- Every AI at war with a major is nuke-willing (W22, James 2026-10-10): the
+-- Every AI at war with a major is nuke-willing (W22, 2026-10-10): the
 -- "Will use nukes" node of the Rose Nuclear Strike tree passes on a favored
 -- action whatever the war value. Without it a winning AI's order failed
 -- (Sumeria, war value +11,400, 2026-10-10 game). Rose only targets majors at

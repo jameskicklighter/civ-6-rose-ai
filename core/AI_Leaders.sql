@@ -382,7 +382,7 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- -> Nuclear Fission): in .scratch/game-test-20261009c the favored leaders
 -- took them at t130-161 or not at all by t162, and Gandhi's Combined Arms goal
 -- at Value 50 was displaced by Flight and Computers. Value 100 for all eight
--- (James, 2026-10-09); the Value 50 ceiling on Engineering (AI_Techs.sql) is
+-- (2026-10-09); the Value 50 ceiling on Engineering (AI_Techs.sql) is
 -- about early competitors, which these late techs do not have.
 ('RoseAggressiveMilitaryTechs',        'TECH_STEEL',                       1, 100),
 ('RoseAggressiveMilitaryTechs',        'TECH_COMBUSTION',                  1, 100),

@@ -108,7 +108,7 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- Industrial Zone in Medieval/Renaissance
 ('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1, 100),
 ('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1, 100),
--- Campus from the Renaissance era on (W26, James 2026-10-10). The favored
+-- Campus from the Renaissance era on (W26, 2026-10-10). The favored
 -- districts above fill the early slots and section 1 drops the base Classical
 -- Campus favor, so Rose AIs built Campuses in 3-4% of their district
 -- contracts over three 174-199 turn games (vanilla 24%). The opening is left

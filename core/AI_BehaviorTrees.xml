@@ -819,7 +819,7 @@ Not applied here:
   </AllowedOperations>
 
   <!--
-  The engine's own Nuclear Assault is off (James, 2026-10-09; kept off for the
+  The engine's own Nuclear Assault is off (2026-10-09; kept off for the
   release, 2026-10-10).
   In 20261009b it ticked before the Rose operation in the same priority pass
   and launched the Jet Bomber Rose had added, at another city (Arabia t209);

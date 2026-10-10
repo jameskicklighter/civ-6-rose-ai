@@ -1247,13 +1247,13 @@ end
 -- device may be ready by the launch). Among those cities, the one with the most
 -- of our land combat units within NUCLEAR_SIEGE_RING tiles beyond the margin
 -- comes first, then the most populous.
--- Pacing (James, 2026-10-09): a refused or unfired order is not repeated for
+-- Pacing (2026-10-09): a refused or unfired order is not repeated for
 -- NUCLEAR_ATTEMPT_COOLDOWN turns, a launch for NUCLEAR_LAUNCH_COOLDOWN (1: the
 -- operation ends on its launch turn, so the next order may follow on the next
 -- turn); the device count, the delivery rule, the slot limit, war weariness
 -- and the World Congress do the rest. A city the AI itself nuked within
 -- NUCLEAR_RECENT_TURNS turns is not a target, so a stockpile is spread over
--- the enemy's cities instead of landing twice on one (James, 2026-10-09).
+-- the enemy's cities instead of landing twice on one (2026-10-09).
 -- ============================================================================
 local NUCLEAR_STRIKE_ENABLED = true;
 local NUCLEAR_OPERATION_NAME = "Rose Nuclear Strike";

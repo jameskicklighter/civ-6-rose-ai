@@ -146,4 +146,8 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- adds its own wartime demand on top.
 ('RoseIndustrialOnwardPseudoYields',  'PSEUDOYIELD_STANDING_ARMY_NUMBER', 1,  15),
 ('RoseIndustrialOnwardPseudoYields',  'PSEUDOYIELD_STANDING_ARMY_VALUE',  1,  15),
-('RoseIndustrialOnwardPseudoYields',  'PSEUDOYIELD_UNIT_COMBAT',          1,  10);
+('RoseIndustrialOnwardPseudoYields',  'PSEUDOYIELD_UNIT_COMBAT',          1,  10),
+-- Air power from the Modern era (Flight). Base default 3.0, with +25 for
+-- Aggressive and Military Victory and +50 for the Airpower agenda. Aerodromes
+-- are favored on the same strategy (AI_Districts.sql). Carriers are left alone.
+('RoseModernOnwardPseudoYields',      'PSEUDOYIELD_UNIT_AIR_COMBAT',      1,  25);

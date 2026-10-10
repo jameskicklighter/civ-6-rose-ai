@@ -25,6 +25,8 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseClassicalDistricts'),
 ('RoseMedievalDistricts'),
 ('RoseRenaissanceDistricts'),
+-- This era or later (cumulative strategy, AI_Strategies.sql)
+('RoseModernOnwardDistricts'),
 -- Always-on districts (all major civs)
 ('RoseMajorCivDistricts'),
 -- Per-civilization unique district lists (separate names required —
@@ -54,7 +56,8 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAncientDistricts',      'Districts'),
 ('RoseClassicalDistricts',    'Districts'),
 ('RoseMedievalDistricts',     'Districts'),
-('RoseRenaissanceDistricts',  'Districts');
+('RoseRenaissanceDistricts',  'Districts'),
+('RoseModernOnwardDistricts', 'Districts');
 
 -- Always-on — tied to TRAIT_LEADER_MAJOR_CIV
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
@@ -86,7 +89,9 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ANCIENT_CHANGES',      'RoseAncientDistricts'),
 ('STRATEGY_CLASSICAL_CHANGES',    'RoseClassicalDistricts'),
 ('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalDistricts'),
-('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceDistricts');
+('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceDistricts'),
+-- Cumulative "era or later" strategy, defined in AI_Strategies.sql.
+('STRATEGY_ROSE_MODERN_ONWARD',   'RoseModernOnwardDistricts');
 
 -- ============================================================================
 -- 5. POPULATE — Era-linked district priorities
@@ -99,7 +104,11 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseMedievalDistricts',   'DISTRICT_COMMERCIAL_HUB',  1, 100),
 -- Industrial Zone in Medieval/Renaissance
 ('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1, 100),
-('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1, 100);
+('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1, 100),
+-- Aerodrome from the Modern era (Flight). No base list favors it; AIs chose
+-- 2-4 per civ by turn 200, none for 2 of 8 (2026-10-09 test). Air combat
+-- demand is raised on the same strategy (AI_Yields.sql).
+('RoseModernOnwardDistricts', 'DISTRICT_AERODROME',       1, 100);
 
 -- ============================================================================
 -- 6. POPULATE — Always-on districts (all major civs, all eras)

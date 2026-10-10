@@ -328,23 +328,35 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- Aggressive already adds UNIT_COMBAT +25, yet Montezuma ended the 2026-10-04
 -- test with 1 land unit in 10 cities. Other leaders get army demand only from
 -- At War and the later-era lists (AI_Strategies.sql, AI_Yields.sql).
+--
+-- Nuclear weapons: the base Nuke Happy agenda's preferences (device demand
+-- PSEUDOYIELD_NUCLEAR_WEAPON +20 and DIPLOACTION_USE_NUCLEAR_WEAPON favored,
+-- base NukeLoverNukePreference / NukeLoverUseNukePreference), plus the four
+-- techs that lead to Uranium, devices, the Bomber and thermonuclear devices.
+-- "Will use nukes" passes when the use action is favored, so these leaders
+-- strike without first needing a negative war value against the target.
+-- Techs are favored only once available, so the tech list does nothing
+-- before the Atomic era.
 -- ============================================================================
 
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseAggressiveMilitaryPseudoYields'),
 ('RoseAggressiveMilitaryDiplomacy'),
-('RoseAggressiveMilitaryBuildings');
+('RoseAggressiveMilitaryBuildings'),
+('RoseAggressiveMilitaryTechs');
 
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseAggressiveMilitaryPseudoYields', 'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'PseudoYields'),
 ('RoseAggressiveMilitaryDiplomacy',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'DiplomaticActions'),
-('RoseAggressiveMilitaryBuildings',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'Buildings');
+('RoseAggressiveMilitaryBuildings',    'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'Buildings'),
+('RoseAggressiveMilitaryTechs',        'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'Technologies');
 
 DELETE FROM AiFavoredItems
 WHERE ListType IN (
     'RoseAggressiveMilitaryPseudoYields',
     'RoseAggressiveMilitaryDiplomacy',
-    'RoseAggressiveMilitaryBuildings'
+    'RoseAggressiveMilitaryBuildings',
+    'RoseAggressiveMilitaryTechs'
 );
 
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
@@ -352,14 +364,88 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_UNIT_COMBAT',         1,  30),
 ('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER', 1, 20),
 ('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',  1, 15),
+('RoseAggressiveMilitaryPseudoYields', 'PSEUDOYIELD_NUCLEAR_WEAPON',      1,  20),
 ('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_FORMAL_WAR',  1,   0),
 ('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_DECLARE_SURPRISE_WAR', 1,  0),
+('RoseAggressiveMilitaryDiplomacy',    'DIPLOACTION_USE_NUCLEAR_WEAPON',  1,   0),
 -- Grand Master's Chapel lets Faith buy land units; only the two AIs that had
 -- it bought armies with Faith in the 2026-10-04 test, while four others banked
 -- 600-3,600 Faith. Tier-2 government buildings exclude each other, so this is
 -- for military leaders only (and Military Recovery, AI_Strategies.sql). RH and
 -- Real Strategy favor government buildings the same way, by victory type.
-('RoseAggressiveMilitaryBuildings',    'BUILDING_GOV_FAITH',               1, 100);
+('RoseAggressiveMilitaryBuildings',    'BUILDING_GOV_FAITH',               1, 100),
+-- Combined Arms reveals Uranium; Nuclear Fission unlocks the Manhattan Project
+-- and the device; Advanced Flight the Bomber; Nuclear Fusion (Information) the
+-- thermonuclear device. Steel, Combustion, Replaceable Parts and Advanced
+-- Ballistics are the Modern/Atomic prerequisites of that chain (Steel ->
+-- Combustion -> Combined Arms; Replaceable Parts -> Advanced Ballistics; both
+-- -> Nuclear Fission): in .scratch/game-test-20261009c the favored leaders
+-- took them at t130-161 or not at all by t162, and Gandhi's Combined Arms goal
+-- at Value 50 was displaced by Flight and Computers. Value 100 for all eight
+-- (James, 2026-10-09); the Value 50 ceiling on Engineering (AI_Techs.sql) is
+-- about early competitors, which these late techs do not have.
+('RoseAggressiveMilitaryTechs',        'TECH_STEEL',                       1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_COMBUSTION',                  1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_REPLACEABLE_PARTS',           1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_ADVANCED_BALLISTICS',         1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_COMBINED_ARMS',               1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_NUCLEAR_FISSION',             1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_ADVANCED_FLIGHT',             1, 100),
+('RoseAggressiveMilitaryTechs',        'TECH_NUCLEAR_FUSION',              1, 100);
+
+-- ============================================================================
+-- 6e. GANDHI: ALWAYS NUCLEAR-WILLING
+-- Base gives Gandhi Nuke Happy (AGENDA_NUKE_LOVER) as a hidden agenda 70% of
+-- the time (AgendaPreferredLeaders). Rose makes the nuclear part permanent on
+-- his leader trait and removes Nuke Happy from his hidden-agenda pool, so it
+-- cannot roll on top (which would double the opinion modifiers below).
+--  - Lists: the Nuke Happy preferences (device demand +20, use action
+--    favored) and the same four nuclear techs as the aggressive-military
+--    leaders. Base GandhiTechs already exists; these use new list names.
+--  - Opinion: Nuke Happy's two opinion modifiers (likes civs that build and use
+--    nukes, dislikes those that do not; both need Nuclear Fission for the owner).
+--    The modifier type is the same one TRAIT_LEADER_MAJOR_CIV, a leader trait,
+--    uses for its standard opinion modifiers. Both carry the HiddenAgenda
+--    argument, as every random-agenda modifier does.
+--  - ExclusiveAgendas: stored one way, historical agenda first, as base stores
+--    Peacekeeper/Darwinist; the schema exposes both directions.
+-- Only Gandhi has TRAIT_LEADER_SATYAGRAHA.
+-- ============================================================================
+
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseGandhiPseudoYields'),
+('RoseGandhiDiplomacy'),
+('RoseGandhiTechs');
+
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseGandhiPseudoYields', 'TRAIT_LEADER_SATYAGRAHA', 'PseudoYields'),
+('RoseGandhiDiplomacy',    'TRAIT_LEADER_SATYAGRAHA', 'DiplomaticActions'),
+('RoseGandhiTechs',        'TRAIT_LEADER_SATYAGRAHA', 'Technologies');
+
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseGandhiPseudoYields', 'PSEUDOYIELD_NUCLEAR_WEAPON',     1, 20),
+('RoseGandhiDiplomacy',    'DIPLOACTION_USE_NUCLEAR_WEAPON', 1,  0),
+-- The same eight techs at Value 100 as RoseAggressiveMilitaryTechs (see the
+-- note there).
+('RoseGandhiTechs',        'TECH_STEEL',                     1, 100),
+('RoseGandhiTechs',        'TECH_COMBUSTION',                1, 100),
+('RoseGandhiTechs',        'TECH_REPLACEABLE_PARTS',         1, 100),
+('RoseGandhiTechs',        'TECH_ADVANCED_BALLISTICS',       1, 100),
+('RoseGandhiTechs',        'TECH_COMBINED_ARMS',             1, 100),
+('RoseGandhiTechs',        'TECH_NUCLEAR_FISSION',           1, 100),
+('RoseGandhiTechs',        'TECH_ADVANCED_FLIGHT',           1, 100),
+('RoseGandhiTechs',        'TECH_NUCLEAR_FUSION',            1, 100);
+
+INSERT OR IGNORE INTO TraitModifiers (TraitType, ModifierId) VALUES
+('TRAIT_LEADER_SATYAGRAHA', 'AGENDA_HIGH_NUKE_LOVE'),
+('TRAIT_LEADER_SATYAGRAHA', 'AGENDA_LOW_NUKE_LOVE');
+
+DELETE FROM AgendaPreferredLeaders
+WHERE LeaderType = 'LEADER_GANDHI'
+  AND AgendaType = 'AGENDA_NUKE_LOVER';
+
+INSERT OR IGNORE INTO ExclusiveAgendas (AgendaOne, AgendaTwo) VALUES
+('AGENDA_PEACEKEEPER', 'AGENDA_NUKE_LOVER');
 
 -- ============================================================================
 -- 7. OTHER LEADER-SPECIFIC DISTRICTS

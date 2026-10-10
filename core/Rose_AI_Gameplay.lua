@@ -12,8 +12,10 @@
 -- Civic grants run only at the AI player's turn start, one civic per player
 -- per game turn: the first ready government civic, otherwise the first
 -- missing tree-fill civic. Remaining grants follow on later turns, so the AI
--- changes government at most once per turn. A grant waits a turn when the
--- AI's own civic completes this turn.
+-- changes government at most once per turn. The civic the AI is researching,
+-- or has started, is never granted: granting it froze the AI's civic research
+-- for the rest of the game (HANDOFF W19). An AI found frozen that way (an
+-- owned civic in progress, from an earlier save) is moved to another civic.
 --
 -- 3. Dynamic war strategies: Forbidden Lua conditions control wartime
 --    replacement, weak-army recovery, and strength-gated peace resistance
@@ -29,6 +31,9 @@
 -- 4. Special operations:
 --    - Any AI major can launch a small, cooldown-controlled naval interception
 --      when an uncommitted melee ship is near an at-war enemy combat ship.
+--    - An AI major that holds a nuclear device and has fought a major for a
+--      few turns starts Rose's one-unit Nuclear Strike operation against an
+--      enemy city in range of a delivery unit (HANDOFF Plan E, W20).
 --
 -- 5. Dead policy card repair: a base-game bug leaves slotted cards without
 --    their effects. Slots holding such cards (found by the InGame audit) are
@@ -134,10 +139,11 @@ local tTreeFillCivics = {
 	GameInfo.Civics["CIVIC_MILITARY_TRAINING"].Index,
 };
 
--- First government civic in tGovtCivics order that is missing and whose
--- prereqs are all owned, or nil. A grant made this turn may make the next
--- entry ready (e.g. Divine Right → Reformed Church); it is granted next turn.
-local function FindReadyGovtCivic(pCulture)
+-- Government civics in tGovtCivics order that are missing and whose prereqs
+-- are all owned. A grant made this turn may make the next entry ready (e.g.
+-- Divine Right → Reformed Church); it is granted next turn.
+local function GetReadyGovtCivics(pCulture)
+	local tReady = {};
 	for _, entry in ipairs(tGovtCivics) do
 		if not pCulture:HasCivic(entry.civic) then
 			local bAllMet = true;
@@ -147,10 +153,10 @@ local function FindReadyGovtCivic(pCulture)
 					break;
 				end
 			end
-			if bAllMet then return entry.civic; end
+			if bAllMet then table.insert(tReady, entry.civic); end
 		end
 	end
-	return nil;
+	return tReady;
 end
 
 -- First missing tree-filling civic once the AI owns Guilds or Medieval Faires,
@@ -187,14 +193,26 @@ end
 -- grant from granting again, and the persisted turn property stops a second
 -- PlayerTurnStarted for the same player-turn (or a reload) from doing so.
 --
--- Every civic completion makes CultureAI commit its policy deck, and two
--- commits in one turn are a common point for cards to lose their effects
--- (HANDOFF W15). The AI's own civic completes later in its turn than this
--- hook (2026-10-06 AI_GovtPolicies.csv: Persia's granted Reformed Church is
--- logged before its researched Medieval Faires on turn 63), so the grant is
--- deferred when the civic in progress is due this turn.
+-- Never grant the civic in progress (HANDOFF W19). SetCivic on it leaves it
+-- in progress although owned: its culture goes nowhere and the AI never
+-- completes another civic. In .scratch/game-test-20261009 all eight AIs
+-- stopped for good right after a grant: Mapuche at turn 50, the rest in the
+-- tier-3 and tier-4 cascades, where the AI picks the next government civic
+-- itself between two grants and the following grant lands on it. Nothing is
+-- granted when the civic in progress cannot be read. Other civics with
+-- culture in them are still granted: Inspirations add culture to civics not
+-- in progress, and in that game the AIs given boosted Mysticism, Theology and
+-- Divine Right kept researching.
+--
+-- Until 2026-10-09 a grant waited a turn when the AI's own civic completed
+-- that turn, to spare CultureAI a second deck commit (HANDOFF W15). That
+-- timed most grants just after the AI had picked its next civic, often the
+-- one Rose was about to grant, and a frozen AI waited every turn (58 times
+-- for Mongolia). It was removed; a grant and the AI's own completion can
+-- again fall on one turn (2 such turns in 200 in that game).
 -- ============================================================================
 local CIVIC_GRANT_TURN_PROPERTY = "ROSE_CIVIC_GRANT_TURN";
+local CIVIC_GRANT_SKIP_PROPERTY = "ROSE_CIVIC_GRANT_SKIP";
 local bGrantingCivic = false;
 
 local function GetCivicTypeName(iCivic)
@@ -212,25 +230,42 @@ for kGovernment in GameInfo.Governments() do
 	end
 end
 
+-- The civic in progress: its index, -1 or less when none, nil when it
+-- cannot be read.
+local function ReadProgressingCivic(pCulture)
+	local bOk, iCivic = pcall(function() return pCulture:GetProgressingCivic(); end);
+	if not bOk or type(iCivic) ~= "number" then return nil; end
+	return iCivic;
+end
+
+-- True when the civic in progress is one the AI already owns (a repeatable
+-- civic such as the Future Civic is owned while it is researched again).
+local function IsOwnedCivicInProgress(pCulture, iCivic)
+	if iCivic == nil or iCivic < 0 then return false; end
+	local kCivic = GameInfo.Civics[iCivic];
+	return kCivic ~= nil and not kCivic.Repeatable and pCulture:HasCivic(iCivic);
+end
+
 -- The civic in progress when it should complete this turn (one turn or less
 -- to go, as the civics tree shows it; AI_GovtPolicies.csv shows 1 on the turn
 -- before each completion), otherwise nil. Also nil when nothing is in
--- progress or the query fails; a failure of both queries is printed once,
--- since grants then never wait and the repair never runs on the AI's own
--- civic.
+-- progress, when the civic in progress is already owned (it never completes)
+-- or when the query fails; a failure of both queries is printed once, since
+-- the repair then never runs on the AI's own civic.
 local bCivicQueryWarned = false;
 local function GetOwnCivicDueThisTurn(pCulture)
 	local iCivic = nil;
 	local bOk, iTurnsLeft = pcall(function()
 		iCivic = pCulture:GetProgressingCivic();
 		if type(iCivic) ~= "number" or iCivic < 0 then return nil; end
+		if IsOwnedCivicInProgress(pCulture, iCivic) then return nil; end
 		return pCulture:GetTurnsToProgressCivic(iCivic);
 	end);
 	if not bOk then
 		bOk, iTurnsLeft = pcall(function() return pCulture:GetTurnsLeftOnCurrentCivic(); end);
 		if not bOk and not bCivicQueryWarned then
 			bCivicQueryWarned = true;
-			print("Rose AI ERROR: Civic progress queries failed; grants will not wait for the AI's own civic: "
+			print("Rose AI ERROR: Civic progress queries failed; the policy repair will not run on the AI's own civic: "
 				.. tostring(iTurnsLeft));
 		end
 	end
@@ -239,16 +274,38 @@ local function GetOwnCivicDueThisTurn(pCulture)
 	return iCivic;
 end
 
--- The civic Rose would grant now and its kind, or nil.
-local function FindCivicToGrant(pCulture)
-	local iCivic = FindReadyGovtCivic(pCulture);
-	if iCivic ~= nil then return iCivic, "government"; end
-	iCivic = FindTreeFillCivic(pCulture);
-	if iCivic ~= nil then return iCivic, "tree-fill"; end
-	return nil, nil;
+-- The civic Rose would grant now and its kind, or nil; also the first civic
+-- passed over (the civic in progress), its kind and why, for the log.
+local function FindCivicToGrant(pCulture, iProgressing)
+	local kSkip = nil;
+	local function Allowed(iCivic, sKind)
+		if iCivic ~= iProgressing then return true; end
+		if kSkip == nil then kSkip = { Civic = iCivic, Kind = sKind, Reason = "in progress" }; end
+		return false;
+	end
+	for _, iCivic in ipairs(GetReadyGovtCivics(pCulture)) do
+		if Allowed(iCivic, "government") then return iCivic, "government", kSkip; end
+	end
+	-- Tree-fill civics are granted in prerequisite order, so a skipped one
+	-- holds back the rest.
+	local iCivic = FindTreeFillCivic(pCulture);
+	if iCivic ~= nil and Allowed(iCivic, "tree-fill") then return iCivic, "tree-fill", kSkip; end
+	return nil, nil, kSkip;
 end
 
-local function GrantOneCivic(iPlayerID, bOwnCivicDue)
+-- Prints a skipped grant when the skipped civic or the reason changes.
+local function ReportGrantSkip(pPlayer, iPlayerID, iTurn, kSkip)
+	local sState = kSkip ~= nil and (kSkip.Civic .. ":" .. kSkip.Reason) or "";
+	if (pPlayer:GetProperty(CIVIC_GRANT_SKIP_PROPERTY) or "") == sState then return; end
+	pPlayer:SetProperty(CIVIC_GRANT_SKIP_PROPERTY, sState);
+	if kSkip ~= nil then
+		print("Rose AI: Skipped " .. kSkip.Kind .. " civic " .. GetCivicTypeName(kSkip.Civic)
+			.. " for AI player " .. iPlayerID .. " turn " .. iTurn .. ": " .. kSkip.Reason);
+	end
+end
+
+local bProgressingWarned = false;
+local function GrantOneCivic(iPlayerID)
 	if bGrantingCivic then return false; end
 	local pPlayer = Players[iPlayerID];
 	if not IsEligibleAIPlayer(pPlayer) then return false; end
@@ -259,15 +316,18 @@ local function GrantOneCivic(iPlayerID, bOwnCivicDue)
 	local pCulture = pPlayer:GetCulture();
 	if pCulture == nil then return false; end
 
-	local iCivic, sKind = FindCivicToGrant(pCulture);
-	if iCivic == nil then return false; end
-
-	if bOwnCivicDue then
-		print("Rose AI: Deferred " .. sKind .. " civic " .. GetCivicTypeName(iCivic)
-			.. " for AI player " .. iPlayerID .. " turn " .. iTurn
-			.. ": its own civic completes this turn");
+	local iProgressing = ReadProgressingCivic(pCulture);
+	if iProgressing == nil then
+		if not bProgressingWarned then
+			bProgressingWarned = true;
+			print("Rose AI ERROR: Civic in progress could not be read; no civic is granted");
+		end
 		return false;
 	end
+
+	local iCivic, sKind, kSkip = FindCivicToGrant(pCulture, iProgressing);
+	ReportGrantSkip(pPlayer, iPlayerID, iTurn, kSkip);
+	if iCivic == nil then return false; end
 
 	-- Record the turn before SetCivic so anything it re-enters sees it.
 	pPlayer:SetProperty(CIVIC_GRANT_TURN_PROPERTY, iTurn);
@@ -283,6 +343,162 @@ local function GrantOneCivic(iPlayerID, bOwnCivicDue)
 	print("Rose AI: Granted " .. sKind .. " civic " .. GetCivicTypeName(iCivic)
 		.. " to AI player " .. iPlayerID .. " turn " .. iTurn);
 	return true;
+end
+
+-- ============================================================================
+-- Frozen civic research (HANDOFF W19)
+--
+-- An AI given its civic in progress by an earlier Rose version keeps that
+-- owned civic in progress and never completes another. Found that way on two
+-- consecutive turn starts, the AI is moved to the cheapest civic it can
+-- research (SetProgressingCivic, the gameplay call the Black Death scenario
+-- uses for each player's starting civic, BlackDeathScenario.lua:189);
+-- CultureAI chooses freely again once that civic completes (all eight frozen
+-- AIs of the 20261009 save took it and kept researching, game 20261009b).
+-- After CIVIC_UNFREEZE_MAX_ATTEMPTS turns on the same owned civic it gives up.
+-- A civic in progress that stays due (one turn or less) without completing for
+-- CIVIC_STALL_REPORT_TURNS turn starts is reported, not changed.
+-- State in player properties: "civic@attempts@lastTurn" and
+-- "civic@count@lastTurn".
+-- ============================================================================
+local CIVIC_UNFREEZE_MAX_ATTEMPTS = 3;
+local CIVIC_STALL_REPORT_TURNS = 3;
+local CIVIC_UNFREEZE_PROPERTY = "ROSE_CIVIC_UNFREEZE";
+local CIVIC_STALL_PROPERTY = "ROSE_CIVIC_STALL";
+
+local tCivicPrereqs = {};
+for kRow in GameInfo.CivicPrereqs() do
+	local kCivic = GameInfo.Civics[kRow.Civic];
+	local kPrereq = GameInfo.Civics[kRow.PrereqCivic];
+	if kCivic ~= nil and kPrereq ~= nil then
+		local tList = tCivicPrereqs[kCivic.Index];
+		if tList == nil then
+			tList = {};
+			tCivicPrereqs[kCivic.Index] = tList;
+		end
+		table.insert(tList, kPrereq.Index);
+	end
+end
+
+-- The cheapest civic (base cost, then table order) the AI does not own and
+-- whose prerequisites it owns, or nil.
+local function FindCivicToResearch(pCulture)
+	local iBest, iBestCost = nil, nil;
+	for kCivic in GameInfo.Civics() do
+		if not kCivic.Repeatable and not pCulture:HasCivic(kCivic.Index) then
+			local bReady = true;
+			for _, iPrereq in ipairs(tCivicPrereqs[kCivic.Index] or {}) do
+				if not pCulture:HasCivic(iPrereq) then
+					bReady = false;
+					break;
+				end
+			end
+			local iCost = kCivic.Cost or 0;
+			if bReady and (iBestCost == nil or iCost < iBestCost) then
+				iBest, iBestCost = kCivic.Index, iCost;
+			end
+		end
+	end
+	return iBest;
+end
+
+local function DescribeCivicProgress(pCulture, iCivic)
+	local function Read(fnRead)
+		local bOk, value = pcall(fnRead);
+		return (bOk and value ~= nil) and tostring(value) or "?";
+	end
+	return "progress " .. Read(function() return pCulture:GetCulturalProgress(iCivic); end)
+		.. "/" .. Read(function() return pCulture:GetCultureCost(iCivic); end)
+		.. " turns " .. Read(function() return pCulture:GetTurnsToProgressCivic(iCivic); end)
+		.. " culture " .. Read(function() return pCulture:GetCultureYield(); end);
+end
+
+local function ClearProperty(pPlayer, sProperty)
+	if pPlayer:GetProperty(sProperty) ~= nil then pPlayer:SetProperty(sProperty, nil); end
+end
+
+-- Fields of a "a@b@c" property as numbers (missing fields are nil).
+local function ReadNumberFields(value)
+	local tFields = {};
+	if type(value) == "string" then
+		for sField in string.gmatch(value, "[^@]+") do table.insert(tFields, tonumber(sField)); end
+	end
+	return tFields;
+end
+
+local function UnfreezeCivicResearch(pPlayer, iPlayerID, pCulture, iTurn, iFrozen)
+	local tState = ReadNumberFields(pPlayer:GetProperty(CIVIC_UNFREEZE_PROPERTY));
+	if tState[1] == iFrozen and tState[3] == iTurn then return; end -- already handled this turn
+	if tState[1] ~= iFrozen then
+		-- First sighting: wait one turn start, in case the AI is only between
+		-- a completion and its next pick. The record is cleared at any turn
+		-- start that finds a civic the AI does not own in progress.
+		pPlayer:SetProperty(CIVIC_UNFREEZE_PROPERTY, iFrozen .. "@0@" .. iTurn);
+		return;
+	end
+	local iAttempts = tState[2] or 0;
+	if iAttempts >= CIVIC_UNFREEZE_MAX_ATTEMPTS then return; end
+	iAttempts = iAttempts + 1;
+	pPlayer:SetProperty(CIVIC_UNFREEZE_PROPERTY, iFrozen .. "@" .. iAttempts .. "@" .. iTurn);
+
+	local sHead = "Civic research frozen for AI player " .. iPlayerID .. " turn " .. iTurn
+		.. ": " .. GetCivicTypeName(iFrozen) .. " in progress is already owned ("
+		.. DescribeCivicProgress(pCulture, iFrozen) .. ")";
+	local iNext = FindCivicToResearch(pCulture);
+	if iNext == nil then
+		pPlayer:SetProperty(CIVIC_UNFREEZE_PROPERTY, iFrozen .. "@" .. CIVIC_UNFREEZE_MAX_ATTEMPTS .. "@" .. iTurn);
+		print("Rose AI: " .. sHead .. "; no civic left to research");
+		return;
+	end
+	local bOk, sError = pcall(function() pCulture:SetProgressingCivic(iNext); end);
+	local iNow = ReadProgressingCivic(pCulture);
+	if bOk and iNow == iNext then
+		print("Rose AI: " .. sHead .. "; set " .. GetCivicTypeName(iNext) .. " in progress");
+		return;
+	end
+	print("Rose AI ERROR: " .. sHead .. "; setting " .. GetCivicTypeName(iNext)
+		.. " in progress failed, attempt " .. iAttempts .. " of " .. CIVIC_UNFREEZE_MAX_ATTEMPTS .. ": "
+		.. (bOk and ("in progress now " .. tostring(iNow)) or tostring(sError)));
+end
+
+local function ReportStalledCivic(pPlayer, iPlayerID, pCulture, iTurn, iCivic)
+	local bOk, iTurnsLeft = pcall(function() return pCulture:GetTurnsToProgressCivic(iCivic); end);
+	if not bOk or type(iTurnsLeft) ~= "number" or iTurnsLeft < 0 or iTurnsLeft > 1 then
+		ClearProperty(pPlayer, CIVIC_STALL_PROPERTY);
+		return;
+	end
+	local tState = ReadNumberFields(pPlayer:GetProperty(CIVIC_STALL_PROPERTY));
+	local iCount = 1;
+	if tState[1] == iCivic and tState[3] == iTurn then
+		return; -- second turn start in the same turn
+	elseif tState[1] == iCivic and tState[3] == iTurn - 1 then
+		iCount = (tState[2] or 0) + 1;
+	end
+	pPlayer:SetProperty(CIVIC_STALL_PROPERTY, iCivic .. "@" .. iCount .. "@" .. iTurn);
+	if iCount == CIVIC_STALL_REPORT_TURNS then
+		print("Rose AI ERROR: Civic research stalled for AI player " .. iPlayerID .. " turn " .. iTurn
+			.. ": " .. GetCivicTypeName(iCivic) .. " due on " .. iCount .. " turn starts without completing ("
+			.. DescribeCivicProgress(pCulture, iCivic) .. ")");
+	end
+end
+
+local function CheckCivicResearch(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return; end
+	local pCulture = pPlayer:GetCulture();
+	if pCulture == nil then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+	local iCivic = ReadProgressingCivic(pCulture);
+	if iCivic == nil or iCivic < 0 then
+		ClearProperty(pPlayer, CIVIC_STALL_PROPERTY);
+		return;
+	end
+	if IsOwnedCivicInProgress(pCulture, iCivic) then
+		UnfreezeCivicResearch(pPlayer, iPlayerID, pCulture, iTurn, iCivic);
+		return;
+	end
+	ClearProperty(pPlayer, CIVIC_UNFREEZE_PROPERTY);
+	ReportStalledCivic(pPlayer, iPlayerID, pCulture, iTurn, iCivic);
 end
 
 -- ============================================================================
@@ -419,8 +635,10 @@ local function RepairDeadPolicies(iPlayerID, sRefill)
 	return true;
 end
 
--- Repair dead cards, then grant at most one civic. The repair runs first so
--- that a grant's own deck commit can refill the cleared slots.
+-- Unfreeze civic research if needed, repair dead cards, then grant at most
+-- one civic. The repair runs before the grant so that a grant's own deck
+-- commit can refill the cleared slots; it is skipped when a government civic
+-- is granted this turn (government changes are when cards die).
 local function GrantCivicOrRepairPolicies(iPlayerID)
 	local pPlayer = Players[iPlayerID];
 	if not IsEligibleAIPlayer(pPlayer) then return; end
@@ -428,15 +646,25 @@ local function GrantCivicOrRepairPolicies(iPlayerID)
 	if pCulture == nil then return; end
 	local iTurn = Game.GetCurrentGameTurn();
 
+	local bCheckOk, sCheckError = pcall(CheckCivicResearch, iPlayerID);
+	if not bCheckOk then
+		print("Rose AI ERROR: Civic research check failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sCheckError));
+	end
+
 	local iOwnCivic = GetOwnCivicDueThisTurn(pCulture);
 	local bOwnCivicDue = iOwnCivic ~= nil;
-	local iGrant, sGrantKind = FindCivicToGrant(pCulture);
-	local bGrantDue = iGrant ~= nil and not bOwnCivicDue and not bGrantingCivic
+	local iProgressing = ReadProgressingCivic(pCulture);
+	local iGrant, sGrantKind = nil, nil;
+	if iProgressing ~= nil then iGrant, sGrantKind = FindCivicToGrant(pCulture, iProgressing); end
+	local bGrantDue = iGrant ~= nil and not bGrantingCivic
 		and pPlayer:GetProperty(CIVIC_GRANT_TURN_PROPERTY) ~= iTurn;
 
 	local sRefill = nil;
 	if POLICY_REPAIR_ON_COMMIT_TURN then
-		if bOwnCivicDue then
+		if bGrantDue and sGrantKind == "government" then
+			-- No repair: the grant may change the government this turn.
+		elseif bOwnCivicDue then
 			-- An unknown civic (fallback query) might unlock a government.
 			if iOwnCivic >= 0 and not tGovernmentCivics[iOwnCivic] then
 				sRefill = "its own civic " .. GetCivicTypeName(iOwnCivic) .. " this turn";
@@ -455,7 +683,7 @@ local function GrantCivicOrRepairPolicies(iPlayerID)
 		end
 	end
 
-	local bOk, sError = pcall(GrantOneCivic, iPlayerID, bOwnCivicDue);
+	local bOk, sError = pcall(GrantOneCivic, iPlayerID);
 	if not bOk then
 		print("Rose AI ERROR: Civic grant failed player "
 			.. tostring(iPlayerID) .. ": " .. tostring(sError));
@@ -957,6 +1185,592 @@ local function TryStartNavalSuperiority(iPlayerID)
 end
 
 -- ============================================================================
+-- Scripted nuclear strike (HANDOFF Plan E, rebuilt for W20)
+--
+-- Starts Rose's own "Rose Nuclear Strike" operation (AI_BehaviorTrees.xml):
+-- one delivery unit, no Recruit node, the target fixed. The engine's Nuclear
+-- Assault fires every delivery unit its team holds, and its recruit pass
+-- takes several (two devices on one city in one tick in the 20261009b game),
+-- so each Rose order is one launch on a city Rose chose. The engine's
+-- Nuclear Assault is off (it took the unit Rose had added in 20261009b;
+-- AI_BehaviorTrees.xml). A scripted start only passes the OP_NUCLEAR slot
+-- check (limit 2).
+-- The sequence follows Firaxis' Nubia scenario (NubiaScenario.lua 628-658):
+-- start the operation with the target owner, the target city's plot and a
+-- rally plot, then add the delivery unit. The operation's tree tests "Will
+-- use nukes" every turn and launches; the node passes for an enemy with a
+-- negative war value, one that nuked us, or for an AI that favors the
+-- use-nukes action (Gandhi, aggressive-military leaders, and every AI while
+-- STRATEGY_ROSE_AT_WAR is active, W22); otherwise the operation ends on its
+-- first turn (visible only in AI_Operation.csv). Lua cannot read the war
+-- value, so enemies we already run an operation against (HasOperationAgainst)
+-- come first: both launches in 20261009b matched one.
+--
+-- Gameplay Lua cannot read which AI operation holds a unit, an operation's
+-- target, or whether it is still running (UnitManager.GetOperationTypeName
+-- returns the unit's current command, not its AI operation). So:
+-- - An order whose launch has not been seen blocks new orders for
+--   NUCLEAR_PENDING_TURNS turns while its unit is alive (the operation may
+--   still hold it). Every launch so far came on the order turn and the
+--   operation's Turn Limiter ends it after about 2 turns, so an order with no
+--   launch by the third turn start has failed: it is reported then and its
+--   unit is free for the next order (W22; until then a failed order's unit
+--   stayed out until a launch was seen, which locked out an AI whose only
+--   delivery unit it was).
+--   NUCLEAR_ATTEMPT_COOLDOWN follows any order or refused start; a launch on
+--   the ordered plot replaces it with NUCLEAR_LAUNCH_COOLDOWN (other launches
+--   only extend it); the OP_NUCLEAR limit caps the rest ("start rejected").
+-- - An aircraft is used only while the AI holds NUCLEAR_MIN_AIRCRAFT
+--   WMD-capable aircraft (counting that unit), because the one taken may
+--   be a siege's only bomber (Nuclear Submarines never fill a siege's strike
+--   role).
+-- - The city our army is attacking is approximated by our land combat units
+--   in a ring just outside the safety distance (below).
+-- - Launches come from the engine's detonation event (a gameplay event); a
+--   drop in the device count larger than the events seen is reported and
+--   counted as well.
+--
+-- Gates (gameplay-side reads only, so every machine decides alike): an
+-- eligible AI that holds a device, has been at war with a major for
+-- NUCLEAR_MIN_WAR_TURNS turn starts, has no pending order and is past its
+-- cooldown. Delivery: a WMD-capable unit within range of the target and
+-- outside the blast: an aircraft's Units.Range (whether the operation's Move
+-- node rebases aircraft is unverified); a Nuclear Submarine's Units.Range is
+-- 2, so it uses the ICBM strike range of the largest device held (12 or 15,
+-- unverified for submarines). Targets: revealed city centres of those
+-- majors, never city-states; enemies with an operation of ours against them
+-- first. The launch can come turns after the order, so the check keeps a
+-- margin: no other unit of ours
+-- within the blast radius of the largest device held plus
+-- NUCLEAR_UNIT_MARGIN, and no city of ours or of anyone but a major we are at
+-- war with inside the largest blast radius of any device type (a bigger
+-- device may be ready by the launch). Among those cities, the one with the most
+-- of our land combat units within NUCLEAR_SIEGE_RING tiles beyond the margin
+-- comes first, then the most populous.
+-- Pacing (James, 2026-10-09): a refused or unfired order is not repeated for
+-- NUCLEAR_ATTEMPT_COOLDOWN turns, a launch for NUCLEAR_LAUNCH_COOLDOWN (1: the
+-- operation ends on its launch turn, so the next order may follow on the next
+-- turn); the device count, the delivery rule, the slot limit, war weariness
+-- and the World Congress do the rest. A city the AI itself nuked within
+-- NUCLEAR_RECENT_TURNS turns is not a target, so a stockpile is spread over
+-- the enemy's cities instead of landing twice on one (James, 2026-10-09).
+-- ============================================================================
+local NUCLEAR_STRIKE_ENABLED = true;
+local NUCLEAR_OPERATION_NAME = "Rose Nuclear Strike";
+local NUCLEAR_MIN_WAR_TURNS = 5;
+local NUCLEAR_ATTEMPT_COOLDOWN = 3;
+local NUCLEAR_LAUNCH_COOLDOWN = 1;
+local NUCLEAR_PENDING_TURNS = 3;
+local NUCLEAR_REPORT_TURNS = 3;
+local NUCLEAR_RECENT_TURNS = 10;
+local NUCLEAR_MIN_AIRCRAFT = 2;
+local NUCLEAR_UNIT_MARGIN = 2;
+local NUCLEAR_SIEGE_RING = 2;
+
+local NUCLEAR_WAR_SINCE_PROPERTY = "ROSE_NUCLEAR_WAR_SINCE";
+local NUCLEAR_STRIKE_PROPERTY = "ROSE_NUCLEAR_STRIKE";
+local NUCLEAR_NEXT_ATTEMPT_PROPERTY = "ROSE_NUCLEAR_NEXT_ATTEMPT";
+local NUCLEAR_DEVICES_PROPERTY = "ROSE_NUCLEAR_DEVICES";
+local NUCLEAR_DETONATIONS_PROPERTY = "ROSE_NUCLEAR_DETONATIONS";
+local NUCLEAR_RECENT_PROPERTY = "ROSE_NUCLEAR_RECENT";
+
+local tWMDTypes = {};
+local iMaxBlastRadius = 0;
+if GameInfo.WMDs ~= nil then
+	for kWMD in GameInfo.WMDs() do
+		table.insert(tWMDTypes, { Index = kWMD.Index, BlastRadius = kWMD.BlastRadius or 0,
+			StrikeRange = kWMD.ICBMStrikeRange or 0 });
+		iMaxBlastRadius = math.max(iMaxBlastRadius, kWMD.BlastRadius or 0);
+	end
+end
+
+-- Bomber, Jet Bomber and Nuclear Submarine (Units.WMDCapable; the
+-- ABILITY_WMD_STRIKE route exists only in the Civ Royale scenario), and the
+-- land combat units that mark a besieged city.
+local tWMDDeliveryUnits = {};
+local tLandCombatUnits = {};
+for kUnit in GameInfo.Units() do
+	if kUnit.WMDCapable == true or kUnit.WMDCapable == 1 then
+		tWMDDeliveryUnits[kUnit.Index] = {
+			Range = kUnit.Range or 0,
+			Air = kUnit.Domain == "DOMAIN_AIR",
+			Naval = kUnit.Domain == "DOMAIN_SEA"
+		};
+	end
+	if kUnit.Domain == "DOMAIN_LAND"
+		and math.max(kUnit.Combat or 0, kUnit.RangedCombat or 0, kUnit.Bombard or 0) > 0 then
+		tLandCombatUnits[kUnit.Index] = true;
+	end
+end
+
+local tNuclearReason = {};
+
+-- Devices held, the largest blast radius among them, and the ICBM strike
+-- range of that largest device (the launch node fires the device with the
+-- largest blast).
+local function GetHeldDevices(pPlayer)
+	if pPlayer.GetWMDs == nil then return 0, 0, 0; end
+	local pWMDs = pPlayer:GetWMDs();
+	if pWMDs == nil then return 0, 0, 0; end
+	local iCount, iRadius, iStrikeRange = 0, 0, 0;
+	for _, kWMD in ipairs(tWMDTypes) do
+		local iHeld = pWMDs:GetWeaponCount(kWMD.Index) or 0;
+		if iHeld > 0 then
+			iCount = iCount + iHeld;
+			if kWMD.BlastRadius >= iRadius then
+				iRadius = kWMD.BlastRadius;
+				iStrikeRange = kWMD.StrikeRange;
+			end
+		end
+	end
+	return iCount, iRadius, iStrikeRange;
+end
+
+local function ExtendNuclearCooldown(pPlayer, iUntil)
+	local iNext = pPlayer:GetProperty(NUCLEAR_NEXT_ATTEMPT_PROPERTY);
+	if type(iNext) ~= "number" or iNext < iUntil then
+		pPlayer:SetProperty(NUCLEAR_NEXT_ATTEMPT_PROPERTY, iUntil);
+	end
+end
+
+-- "enemyID=firstTurn" entries, sorted, for every major we are at war with:
+-- the first turn start at which this hook saw the war.
+local function UpdateNuclearWarSince(pPlayer, iTurn)
+	local tOld = {};
+	local sOld = pPlayer:GetProperty(NUCLEAR_WAR_SINCE_PROPERTY);
+	if type(sOld) == "string" then
+		for sID, sTurn in string.gmatch(sOld, "(%d+)=(%-?%d+)") do
+			tOld[tonumber(sID)] = tonumber(sTurn);
+		end
+	end
+	local tSince = {};
+	local tParts = {};
+	local pDiplomacy = pPlayer:GetDiplomacy();
+	for _, pOther in ipairs(PlayerManager.GetAliveMajors()) do
+		local iOtherID = pOther:GetID();
+		if iOtherID ~= pPlayer:GetID() and pDiplomacy:IsAtWarWith(iOtherID) then
+			tSince[iOtherID] = tOld[iOtherID] or iTurn;
+			table.insert(tParts, iOtherID .. "=" .. tSince[iOtherID]);
+		end
+	end
+	table.sort(tParts);
+	local sValue = table.concat(tParts, ";");
+	if (sOld or "") ~= sValue then
+		pPlayer:SetProperty(NUCLEAR_WAR_SINCE_PROPERTY, sValue);
+	end
+	return tSince;
+end
+
+-- The last order as "operation@turn@unit@targetOwner@x@y@flags"; flags:
+-- l = launch seen, r = missing launch reported.
+local function ReadNuclearStrike(pPlayer)
+	local sValue = pPlayer:GetProperty(NUCLEAR_STRIKE_PROPERTY);
+	if type(sValue) ~= "string" then return nil; end
+	local sOp, sTurn, sUnit, sOwner, sX, sY, sFlags = string.match(sValue,
+		"^(%-?%d+)@(%-?%d+)@(%-?%d+)@(%-?%d+)@(%-?%d+)@(%-?%d+)@(%a*)$");
+	if sOp == nil then return nil; end
+	return {
+		Operation = tonumber(sOp), Turn = tonumber(sTurn), Unit = tonumber(sUnit),
+		Owner = tonumber(sOwner), X = tonumber(sX), Y = tonumber(sY),
+		Launched = string.find(sFlags, "l", 1, true) ~= nil,
+		Reported = string.find(sFlags, "r", 1, true) ~= nil
+	};
+end
+
+local function WriteNuclearStrike(pPlayer, kStrike)
+	local sValue = kStrike.Operation .. "@" .. kStrike.Turn .. "@" .. kStrike.Unit
+		.. "@" .. kStrike.Owner .. "@" .. kStrike.X .. "@" .. kStrike.Y .. "@"
+		.. (kStrike.Launched and "l" or "") .. (kStrike.Reported and "r" or "");
+	if pPlayer:GetProperty(NUCLEAR_STRIKE_PROPERTY) ~= sValue then
+		pPlayer:SetProperty(NUCLEAR_STRIKE_PROPERTY, sValue);
+	end
+end
+
+-- Plots this player's own detonations hit within the last NUCLEAR_RECENT_TURNS
+-- turns, as a list of { X, Y, Turn } read from sorted "x@y@turn" entries.
+local function ReadRecentNukes(pPlayer, iTurn)
+	local tRecent = {};
+	local sValue = pPlayer:GetProperty(NUCLEAR_RECENT_PROPERTY);
+	if type(sValue) == "string" then
+		for sX, sY, sTurn in string.gmatch(sValue, "(%-?%d+)@(%-?%d+)@(%-?%d+)") do
+			local iNuked = tonumber(sTurn);
+			if iTurn - iNuked < NUCLEAR_RECENT_TURNS then
+				table.insert(tRecent, { X = tonumber(sX), Y = tonumber(sY), Turn = iNuked });
+			end
+		end
+	end
+	return tRecent;
+end
+
+local function RecordRecentNuke(pPlayer, iX, iY, iTurn)
+	local tParts = {};
+	for _, kNuke in ipairs(ReadRecentNukes(pPlayer, iTurn)) do
+		if kNuke.X ~= iX or kNuke.Y ~= iY then
+			table.insert(tParts, kNuke.X .. "@" .. kNuke.Y .. "@" .. kNuke.Turn);
+		end
+	end
+	table.insert(tParts, iX .. "@" .. iY .. "@" .. iTurn);
+	table.sort(tParts);
+	pPlayer:SetProperty(NUCLEAR_RECENT_PROPERTY, table.concat(tParts, ";"));
+end
+
+local function HasPlayerUnit(pPlayer, iUnitID)
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		if pUnit:GetID() == iUnitID then return true; end
+	end
+	return false;
+end
+
+-- Cross-checks launches against the device count and reports an order with no
+-- launch. Returns the last order, if any.
+local function MonitorNuclearStrike(pPlayer, iTurn, iDevices)
+	local iPlayerID = pPlayer:GetID();
+	local iLastDevices = pPlayer:GetProperty(NUCLEAR_DEVICES_PROPERTY);
+	if iLastDevices ~= iDevices then
+		pPlayer:SetProperty(NUCLEAR_DEVICES_PROPERTY, iDevices);
+	end
+	local iSeen = pPlayer:GetProperty(NUCLEAR_DETONATIONS_PROPERTY);
+	if type(iSeen) ~= "number" then iSeen = 0; end
+	if iSeen ~= 0 then pPlayer:SetProperty(NUCLEAR_DETONATIONS_PROPERTY, 0); end
+	local kStrike = ReadNuclearStrike(pPlayer);
+	if type(iLastDevices) == "number" and iLastDevices - iDevices > iSeen then
+		ExtendNuclearCooldown(pPlayer, iTurn + NUCLEAR_LAUNCH_COOLDOWN);
+		local sOrder = "";
+		if kStrike ~= nil and not kStrike.Launched then
+			kStrike.Launched = true;
+			sOrder = ", counted as the launch of strike operation " .. kStrike.Operation;
+		end
+		print("Rose AI: Nuclear devices of player " .. iPlayerID .. " fell "
+			.. iLastDevices .. " -> " .. iDevices .. " by turn " .. iTurn
+			.. " with " .. iSeen .. " detonation events seen" .. sOrder);
+	end
+	if kStrike == nil then return nil; end
+	if not kStrike.Launched and not kStrike.Reported
+		and iTurn - kStrike.Turn >= NUCLEAR_REPORT_TURNS then
+		kStrike.Reported = true;
+		print("Rose AI: Nuclear strike operation " .. kStrike.Operation
+			.. " player " .. iPlayerID .. " no launch " .. (iTurn - kStrike.Turn)
+			.. " turns after the order, delivery unit " .. kStrike.Unit
+			.. (HasPlayerUnit(pPlayer, kStrike.Unit) and " still present" or " lost"));
+	end
+	WriteNuclearStrike(pPlayer, kStrike);
+	return kStrike;
+end
+
+-- WMD-capable units; aircraft only while the AI holds NUCLEAR_MIN_AIRCRAFT
+-- of them. A naval unit's range is iStrikeRange (the held device's ICBM
+-- range), an aircraft's its Units.Range.
+local function GetNuclearDeliveryUnits(pPlayer, iStrikeRange)
+	local tUnits = {};
+	local iAircraft = 0;
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		local kDelivery = tWMDDeliveryUnits[pUnit:GetType()];
+		if kDelivery ~= nil then
+			if kDelivery.Air then iAircraft = iAircraft + 1; end
+			table.insert(tUnits, { Unit = pUnit, Air = kDelivery.Air,
+				Range = kDelivery.Naval and iStrikeRange or kDelivery.Range });
+		end
+	end
+	local tUsable = {};
+	for _, kUnit in ipairs(tUnits) do
+		if not kUnit.Air or iAircraft >= NUCLEAR_MIN_AIRCRAFT then
+			table.insert(tUsable, kUnit);
+		end
+	end
+	return tUsable, #tUnits, iAircraft;
+end
+
+local function CountPlotsWithin(tPlots, iX, iY, iDistance, iSkipID)
+	local iCount = 0;
+	for _, kPlot in ipairs(tPlots) do
+		if (iSkipID == nil or kPlot.ID ~= iSkipID)
+			and Map.GetPlotDistance(kPlot.X, kPlot.Y, iX, iY) <= iDistance then
+			iCount = iCount + 1;
+		end
+	end
+	return iCount;
+end
+
+-- True when one of our operations targets iEnemyID (any operation type; the
+-- only operation read gameplay Lua has). XP2 DLL binding: (player, bool, int,
+-- int), the bool false asks only whether an operation targets that player.
+local bOperationReadWarned = false;
+local function HasOperationAgainst(pPlayer, iEnemyID)
+	local pMilitaryAI = pPlayer:GetAi_Military();
+	if pMilitaryAI == nil then return false; end
+	local bOk, bHas = pcall(function() return pMilitaryAI:HasOperationAgainst(iEnemyID, false); end);
+	if not bOk and not bOperationReadWarned then
+		bOperationReadWarned = true;
+		print("Rose AI ERROR: HasOperationAgainst failed; nuclear targets ignore our operations: " .. tostring(bHas));
+	end
+	return bOk and bHas == true;
+end
+
+-- Returns the chosen target { City, Owner, Delivery, Operation, Besiegers,
+-- Population, Nearest } or nil and a reason.
+local function FindNuclearTarget(pPlayer, tSince, iTurn, iRadius, iStrikeRange)
+	local iPlayerID = pPlayer:GetID();
+	local tEnemyIDs = {};
+	for iOtherID, iSince in pairs(tSince) do
+		if iTurn - iSince >= NUCLEAR_MIN_WAR_TURNS then
+			table.insert(tEnemyIDs, iOtherID);
+		end
+	end
+	if #tEnemyIDs == 0 then
+		return nil, "no war with a major of " .. NUCLEAR_MIN_WAR_TURNS .. "+ turns";
+	end
+	table.sort(tEnemyIDs);
+	local tDelivery, iDeliveryUnits, iAircraft = GetNuclearDeliveryUnits(pPlayer, iStrikeRange);
+	if #tDelivery == 0 then
+		if iDeliveryUnits == 0 then
+			return nil, "no delivery unit";
+		end
+		return nil, "only " .. iAircraft .. " WMD aircraft (needs " .. NUCLEAR_MIN_AIRCRAFT .. ")";
+	end
+	local pVisibility = PlayersVisibility ~= nil and PlayersVisibility[iPlayerID] or nil;
+	if pVisibility == nil then return nil, "no visibility data"; end
+
+	-- Our units must stay clear of the blast with a margin; cities of ours and
+	-- of anyone but a major we are at war with must stay outside the blast.
+	local iUnitSafe = iRadius + NUCLEAR_UNIT_MARGIN;
+	local iSiegeReach = iUnitSafe + NUCLEAR_SIEGE_RING;
+	local tOwnUnits = {};
+	local tLandUnits = {};
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		local kPlot = { X = pUnit:GetX(), Y = pUnit:GetY(), ID = pUnit:GetID() };
+		table.insert(tOwnUnits, kPlot);
+		if tLandCombatUnits[pUnit:GetType()] then table.insert(tLandUnits, kPlot); end
+	end
+	local tProtectedCities = {};
+	for _, pOther in ipairs(GetAliveCityOwners()) do
+		if tSince[pOther:GetID()] == nil then
+			for _, pCity in pOther:GetCities():Members() do
+				table.insert(tProtectedCities, { X = pCity:GetX(), Y = pCity:GetY() });
+			end
+		end
+	end
+
+	-- Plots we nuked ourselves within NUCLEAR_RECENT_TURNS turns.
+	local tRecent = {};
+	for _, kNuke in ipairs(ReadRecentNukes(pPlayer, iTurn)) do
+		tRecent[kNuke.X .. "," .. kNuke.Y] = true;
+	end
+
+	local kBest = nil;
+	local iInRange, iRecentSkipped = 0, 0;
+	for _, iOwner in ipairs(tEnemyIDs) do
+		local pOwner = Players[iOwner];
+		if pOwner ~= nil and pOwner:IsAlive() and pOwner:IsMajor() then
+			local bOperation = HasOperationAgainst(pPlayer, iOwner);
+			for _, pCity in pOwner:GetCities():Members() do
+				local iX, iY = pCity:GetX(), pCity:GetY();
+				-- Closest unit in range that is itself outside the blast.
+				local kUnit, iUnitDistance = nil, nil;
+				if pVisibility:IsRevealed(iX, iY) then
+					for _, kDelivery in ipairs(tDelivery) do
+						local iDistance = Map.GetPlotDistance(
+							kDelivery.Unit:GetX(), kDelivery.Unit:GetY(), iX, iY);
+						if iDistance <= kDelivery.Range and iDistance > iRadius
+							and (kUnit == nil or iDistance < iUnitDistance) then
+							kUnit, iUnitDistance = kDelivery, iDistance;
+						end
+					end
+				end
+				if kUnit ~= nil then
+					iInRange = iInRange + 1;
+				end
+				if kUnit ~= nil and tRecent[iX .. "," .. iY] then
+					iRecentSkipped = iRecentSkipped + 1;
+				elseif kUnit ~= nil then
+					local iDeliveryID = kUnit.Unit:GetID();
+					if CountPlotsWithin(tOwnUnits, iX, iY, iUnitSafe, iDeliveryID) == 0
+						and CountPlotsWithin(tProtectedCities, iX, iY, iMaxBlastRadius) == 0 then
+						local iBesiegers = CountPlotsWithin(tLandUnits, iX, iY, iSiegeReach);
+						local iPopulation = pCity:GetPopulation();
+						if kBest == nil
+							or (bOperation and not kBest.Operation)
+							or (bOperation == kBest.Operation and (iBesiegers > kBest.Besiegers
+								or (iBesiegers == kBest.Besiegers and iPopulation > kBest.Population))) then
+							kBest = { City = pCity, Owner = iOwner, Delivery = kUnit, Operation = bOperation,
+								Besiegers = iBesiegers, Population = iPopulation };
+						end
+					end
+				end
+			end
+		end
+	end
+	if kBest == nil then
+		if iInRange == 0 then
+			return nil, "no revealed enemy city in range of a delivery unit";
+		end
+		if iRecentSkipped == iInRange then
+			return nil, "every enemy city in range was nuked within " .. NUCLEAR_RECENT_TURNS .. " turns";
+		end
+		return nil, "every enemy city in range has our units within " .. iUnitSafe
+			.. " tiles or a protected city within " .. iMaxBlastRadius;
+	end
+	local iNearest = nil;
+	local iDeliveryID = kBest.Delivery.Unit:GetID();
+	for _, kPlot in ipairs(tOwnUnits) do
+		if kPlot.ID ~= iDeliveryID then
+			local iDistance = Map.GetPlotDistance(kPlot.X, kPlot.Y, kBest.City:GetX(), kBest.City:GetY());
+			if iNearest == nil or iDistance < iNearest then iNearest = iDistance; end
+		end
+	end
+	kBest.Nearest = iNearest;
+	return kBest, nil;
+end
+
+local function ReportNuclearReason(iPlayerID, sReason)
+	if tNuclearReason[iPlayerID] == sReason then return; end
+	tNuclearReason[iPlayerID] = sReason;
+	if sReason ~= nil then
+		print("Rose AI: Nuclear strike not ordered for player " .. iPlayerID
+			.. " turn " .. Game.GetCurrentGameTurn() .. ": " .. sReason);
+	end
+end
+
+local function TryNuclearStrike(iPlayerID)
+	if not NUCLEAR_STRIKE_ENABLED then return; end
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+	local tSince = UpdateNuclearWarSince(pPlayer, iTurn);
+	local iDevices, iRadius, iStrikeRange = GetHeldDevices(pPlayer);
+	local kLast = MonitorNuclearStrike(pPlayer, iTurn, iDevices);
+	if iDevices <= 0 then
+		ReportNuclearReason(iPlayerID, nil);
+		return;
+	end
+	if kLast ~= nil and not kLast.Launched and iTurn - kLast.Turn < NUCLEAR_PENDING_TURNS
+		and HasPlayerUnit(pPlayer, kLast.Unit) then
+		ReportNuclearReason(iPlayerID, "waiting for strike operation " .. kLast.Operation
+			.. " ordered turn " .. kLast.Turn);
+		return;
+	end
+	local iNextAttempt = pPlayer:GetProperty(NUCLEAR_NEXT_ATTEMPT_PROPERTY);
+	if type(iNextAttempt) == "number" and iTurn < iNextAttempt then
+		ReportNuclearReason(iPlayerID, "cooldown until turn " .. iNextAttempt);
+		return;
+	end
+	local kTarget, sReason = FindNuclearTarget(pPlayer, tSince, iTurn, iRadius, iStrikeRange);
+	if kTarget == nil then
+		ReportNuclearReason(iPlayerID, sReason);
+		return;
+	end
+	ReportNuclearReason(iPlayerID, nil);
+
+	local pUnit = kTarget.Delivery.Unit;
+	local pCity = kTarget.City;
+	local pMilitaryAI = pPlayer:GetAi_Military();
+	local pTargetPlot = Map.GetPlot(pCity:GetX(), pCity:GetY());
+	local pRallyPlot = Map.GetPlot(pUnit:GetX(), pUnit:GetY());
+	if pMilitaryAI == nil or pTargetPlot == nil or pRallyPlot == nil then return; end
+	ExtendNuclearCooldown(pPlayer, iTurn + NUCLEAR_ATTEMPT_COOLDOWN);
+	local iOperationID = pMilitaryAI:StartScriptedOperationWithTargetAndRally(
+		NUCLEAR_OPERATION_NAME, kTarget.Owner, pTargetPlot:GetIndex(), pRallyPlot:GetIndex());
+	-- The DLL returns the operation id, or -1 (no slot or no operation) or 0
+	-- (an early refusal); real ids are large (3407877 for a naval start).
+	if type(iOperationID) ~= "number" or iOperationID <= 0 then
+		print("Rose AI: Nuclear strike start rejected for player " .. iPlayerID
+			.. " turn " .. iTurn .. " against player " .. kTarget.Owner
+			.. " result " .. tostring(iOperationID));
+		return;
+	end
+	-- Returns nothing (Nubia does not check it either).
+	pMilitaryAI:AddUnitToScriptedOperation(iOperationID, pUnit:GetID());
+	WriteNuclearStrike(pPlayer, { Operation = iOperationID, Turn = iTurn,
+		Unit = pUnit:GetID(), Owner = kTarget.Owner, X = pCity:GetX(), Y = pCity:GetY() });
+	local kUnitInfo = GetUnitInfo(pUnit);
+	print("Rose AI: Nuclear strike ordered for player " .. iPlayerID
+		.. " turn " .. iTurn
+		.. " against player " .. kTarget.Owner
+		.. " city " .. tostring(pCity:GetName())
+		.. " plot (" .. pCity:GetX() .. "," .. pCity:GetY() .. ")"
+		.. " population " .. kTarget.Population
+		.. " besiegers " .. kTarget.Besiegers
+		.. " our operation against them " .. (kTarget.Operation and "yes" or "no")
+		.. " with unit " .. pUnit:GetID()
+		.. " " .. (kUnitInfo ~= nil and kUnitInfo.UnitType or "?")
+		.. " at (" .. pUnit:GetX() .. "," .. pUnit:GetY() .. ")"
+		.. " range " .. kTarget.Delivery.Range
+		.. " operation " .. iOperationID
+		.. " devices " .. iDevices .. " blast radius " .. iRadius
+		.. " nearest own unit " .. tostring(kTarget.Nearest));
+end
+
+-- Any player's detonation: logged with who owns the plot and what of the
+-- launcher's own lies inside the blast (survivors; the event comes after the
+-- blast). For an eligible AI it also counts the launch for the cross-check and
+-- starts the launch cooldown. It marks the open order launched only when it
+-- hit the ordered plot (the Rose operation cannot retarget): the engine's own
+-- Nuclear Assault launches too, sometimes with the unit Rose added
+-- (20261009b, Arabia t209), and such a launch is not this order's.
+local function OnNuclearWeaponDetonated(iPlayerID, iX, iY, iWMDType)
+	if not NUCLEAR_STRIKE_ENABLED then return; end
+	local pPlayer = Players[iPlayerID];
+	if pPlayer == nil then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+	local kWMD = GameInfo.WMDs ~= nil and GameInfo.WMDs[iWMDType] or nil;
+	local iRadius = kWMD ~= nil and (kWMD.BlastRadius or 0) or 0;
+	local iOwnUnits = 0;
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		if Map.GetPlotDistance(pUnit:GetX(), pUnit:GetY(), iX, iY) <= iRadius then
+			iOwnUnits = iOwnUnits + 1;
+		end
+	end
+	local iOwnCities = 0;
+	for _, pCity in pPlayer:GetCities():Members() do
+		if Map.GetPlotDistance(pCity:GetX(), pCity:GetY(), iX, iY) <= iRadius then
+			iOwnCities = iOwnCities + 1;
+		end
+	end
+	local pPlot = Map.GetPlot(iX, iY);
+	local iPlotOwner = pPlot ~= nil and pPlot:GetOwner() or -1;
+	local pPlotOwner = iPlotOwner >= 0 and Players[iPlotOwner] or nil;
+	local sOrder = "";
+	if IsEligibleAIPlayer(pPlayer) then
+		local iSeen = pPlayer:GetProperty(NUCLEAR_DETONATIONS_PROPERTY);
+		pPlayer:SetProperty(NUCLEAR_DETONATIONS_PROPERTY,
+			(type(iSeen) == "number" and iSeen or 0) + 1);
+		ExtendNuclearCooldown(pPlayer, iTurn + NUCLEAR_LAUNCH_COOLDOWN);
+		RecordRecentNuke(pPlayer, iX, iY, iTurn);
+		local kStrike = ReadNuclearStrike(pPlayer);
+		if kStrike ~= nil then
+			local bOrderPlot = kStrike.X == iX and kStrike.Y == iY;
+			sOrder = " Rose order turn " .. kStrike.Turn .. " operation " .. kStrike.Operation
+				.. " target plot (" .. kStrike.X .. "," .. kStrike.Y .. ") distance "
+				.. Map.GetPlotDistance(kStrike.X, kStrike.Y, iX, iY)
+				.. (kStrike.Launched and " (already launched)" or (bOrderPlot and "" or " (not this order)"));
+			if bOrderPlot and not kStrike.Launched then
+				kStrike.Launched = true;
+				WriteNuclearStrike(pPlayer, kStrike);
+				-- The order fired: its attempt cooldown (meant for refused orders)
+				-- gives way to the launch cooldown.
+				pPlayer:SetProperty(NUCLEAR_NEXT_ATTEMPT_PROPERTY, iTurn + NUCLEAR_LAUNCH_COOLDOWN);
+			end
+		end
+	end
+	print("Rose AI: Nuclear detonation by player " .. iPlayerID
+		.. " turn " .. iTurn
+		.. " at (" .. iX .. "," .. iY .. ") weapon "
+		.. (kWMD ~= nil and kWMD.WeaponType or tostring(iWMDType))
+		.. " plot owner " .. iPlotOwner
+		.. ((pPlotOwner ~= nil and not pPlotOwner:IsMajor()) and " (minor)" or "")
+		.. " own cities in blast " .. iOwnCities
+		.. " own units in blast " .. iOwnUnits .. sOrder);
+end
+if GameEvents.OnNuclearWeaponDetonated ~= nil then
+	GameEvents.OnNuclearWeaponDetonated.Add(function(iPlayerID, iX, iY, iWMDType)
+		local bOk, sError = pcall(OnNuclearWeaponDetonated, iPlayerID, iX, iY, iWMDType);
+		if not bOk then
+			print("Rose AI ERROR: Nuclear detonation handler failed player "
+				.. tostring(iPlayerID) .. ": " .. tostring(sError));
+		end
+	end);
+end
+
+-- ============================================================================
 -- Stuck Trader diagnostic (HANDOFF W14 item 2). Print-only.
 --
 -- AI Traders have sat in a city for many turns logging "Can't Start" on
@@ -1102,6 +1916,11 @@ end
 -- Starting them inside PlayerTurnStarted can re-enter native AI initialization.
 function OnPlayerTurnStartComplete(iPlayerID)
 	RunTraderDiagnostic(iPlayerID, "PlayerTurnStartComplete");
+	local bOk, sError = pcall(TryNuclearStrike, iPlayerID);
+	if not bOk then
+		print("Rose AI ERROR: Nuclear strike failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
 	TryStartNavalSuperiority(iPlayerID);
 end
 

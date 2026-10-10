@@ -62,7 +62,8 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, Thres
 -- At War maintains unit replacement and deemphasizes optional infrastructure.
 -- It adds no assault slot: an extra slot (tried 2026-10-03) let Gaul run five
 -- assaults at once, mostly on city-states, with teams too small to take cities.
--- It also stops new city-state wars and values enemy cities more (see below).
+-- It also stops new city-state wars, values enemy cities more and makes the
+-- AI willing to use nuclear weapons (see below).
 -- Military Recovery stacks when our military is below 70% of the combined
 -- opposing strength, trading one assault slot for defense and reconstruction.
 -- War Advantage suppresses voluntary peace only while our military is at
@@ -162,6 +163,13 @@ INSERT OR REPLACE INTO AiFavoredItems
 -- declaration, so it fails its pre-war limiter and may restart on that target,
 -- holding the planned slot (the wartime slot is unaffected).
 ('RoseAtWarDiplomacy', 'DIPLOACTION_DECLARE_WAR_MINOR_CIV',      0,   0),
+-- Every AI at war with a major is nuke-willing (W22, James 2026-10-10): the
+-- "Will use nukes" node of the Rose Nuclear Strike tree passes on a favored
+-- action whatever the war value. Without it a winning AI's order failed
+-- (Sumeria, war value +11,400, 2026-10-10 game). Rose only targets majors at
+-- war with us; the engine's Nuclear Assault is off (AI_BehaviorTrees.xml).
+-- Inside At War's 20-turn restart window the engine's own rule applies.
+('RoseAtWarDiplomacy', 'DIPLOACTION_USE_NUCLEAR_WEAPON',         1,   0),
 
 -- Recovery stacks with At War and temporarily favors rebuilding over attack.
 -- The -1 removes the planned (CITY_ASSAULT) slot; the wartime slot type

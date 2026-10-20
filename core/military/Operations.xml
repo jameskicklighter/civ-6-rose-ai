@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Rose AI: changes to existing operation definitions and teams, and the removal of the
+engine's Nuclear Assault. The trees and Rose's own operations are in trees/.
+AGENTS.md "### military/ (Rose_Operation_Roles.sql, Operations.xml, trees/)".
+-->
+<GameInfo>
+
+  <AiOperationTeams>
+    <!-- Lower city-assault strength ratios, so assembled armies proceed; AGENTS.md "City assault strength tuning". -->
+    <Update>
+      <Where TeamName="Simple City Attack Force" OperationName="Attack Enemy City" />
+      <Set InitialStrengthAdvantage="0.8" OngoingStrengthAdvantage="1.6" />
+    </Update>
+    <!-- kept; inert while SelfStart is false on Wartime Attack Enemy City (below). -->
+    <Update>
+      <Where TeamName="Simple City Attack Force" OperationName="Wartime Attack Enemy City" />
+      <Set InitialStrengthAdvantage="0.4" OngoingStrengthAdvantage="0.8" />
+    </Update>
+    <Update>
+      <Where TeamName="City Attack Force" OperationName="Attack Walled City" />
+      <Set InitialStrengthAdvantage="1.0" OngoingStrengthAdvantage="1.75" />
+    </Update>
+    <!-- kept; inert while SelfStart is false on Wartime Attack Walled City (below). -->
+    <Update>
+      <Where TeamName="City Attack Force" OperationName="Wartime Attack Walled City" />
+      <Set InitialStrengthAdvantage="0.6" OngoingStrengthAdvantage="1.0" />
+    </Update>
+    <!-- A Settler and at most two escorts; AGENTS.md "Settlement operation concurrency". -->
+    <Update>
+      <Where TeamName="Settle City Team" OperationName="Settle New City" />
+      <Set MaxUnits="3" />
+    </Update>
+    <!-- The Lua-seeded ship plus at most two nearby ships; AGENTS.md "Naval Superiority replacement". -->
+    <Update>
+      <Where TeamName="Naval Superiority Force" OperationName="Naval Superiority" />
+      <Set MaxUnits="3" />
+    </Update>
+    <!--
+    kept; inert while Nuclear Assault is removed from AllowedOperations (end of file).
+    -5 or lower is a DLL sentinel for "required strength 0"; AGENTS.md "Nuclear Assault fix".
+    -->
+    <Update>
+      <Where TeamName="Nuclear Attack" OperationName="Nuclear Assault" />
+      <Set InitialStrengthAdvantage="-5" OngoingStrengthAdvantage="-5" />
+    </Update>
+  </AiOperationTeams>
+
+  <OpTeamRequirements>
+    <!--
+    Walled assaults need one wall-breaker (UNITTYPE_ROSE_SIEGE_STRIKE, Rose_Operation_Roles.sql);
+    ground siege and bombers keep their own caps; AGENTS.md "Walled-city siege composition".
+    -->
+    <Update>
+      <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE" />
+      <Set MinNumber="0" MaxNumber="3" />
+    </Update>
+    <Replace TeamName="City Attack Force" AiType="UNITTYPE_ROSE_SIEGE_STRIKE" MinNumber="1" />
+    <Update>
+      <Where TeamName="City Attack Force" AiType="UNITTYPE_SIEGE_ALL" />
+      <Set MinNumber="0" />
+    </Update>
+    <Update>
+      <Where TeamName="City Attack Force" AiType="UNITTYPE_AIR_SIEGE" />
+      <Set MinNumber="0" MaxNumber="2" />
+    </Update>
+
+    <!-- City Defense takes no bombard units and at most three combat units; AGENTS.md "City-defense siege reservation", "City Defense cap". -->
+    <Replace TeamName="City Defense" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
+    <Update>
+      <Where TeamName="City Defense" AiType="UNITAI_COMBAT" />
+      <Set MaxNumber="3" />
+    </Update>
+
+    <!-- Camp attacks take no bombers (ground movement only); AGENTS.md "Simple Operation Attack (barbarian camps)". -->
+    <Replace TeamName="Simple Early Attack Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
+
+    <!-- One or two combat escorts, no siege or air units; AGENTS.md "Settlement operation concurrency". -->
+    <Update>
+      <Where TeamName="Settle City Team" AiType="UNITAI_COMBAT" />
+      <Set MinNumber="1" MaxNumber="2" />
+    </Update>
+    <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE_ALL" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Settle City Team" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
+
+    <!-- A small combat-ships-only interception force; AGENTS.md "Naval Superiority replacement". -->
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_MELEE" MinNumber="1" MaxNumber="2" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_RANGED" MinNumber="0" MaxNumber="1" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_CIVILIAN_LEADER" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_LAND_COMBAT" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_NUCLEAR" MinNumber="0" MaxNumber="0" />
+
+    <!-- kept; inert while Nuclear Assault is removed from AllowedOperations. One delivery unit; AGENTS.md "Nuclear Assault fix". -->
+    <Update>
+      <Where TeamName="Nuclear Attack" AiType="UNITTYPE_NUCLEAR" />
+      <Set MaxNumber="1" />
+    </Update>
+  </OpTeamRequirements>
+
+  <AiOperationDefs>
+    <!-- Started only by Lua, against a visible enemy ship; AGENTS.md "Naval Superiority replacement". -->
+    <Update>
+      <Where OperationName="Naval Superiority" />
+      <Set SelfStart="false" />
+    </Update>
+
+    <!-- Walled-city reach (base: planned 30 in-area / 0 world); AGENTS.md "Walled-city reach". -->
+    <Update>
+      <Where OperationName="Attack Walled City" />
+      <Set MaxTargetDistInRegion="16" MaxTargetDistInArea="16" MaxTargetDistInWorld="12" />
+    </Update>
+    <!-- kept; inert while SelfStart is false on Wartime Attack Walled City (below). -->
+    <Update>
+      <Where OperationName="Wartime Attack Walled City" />
+      <Set MaxTargetDistInRegion="22" MaxTargetDistInArea="22" MaxTargetDistInWorld="21" />
+    </Update>
+
+    <!--
+    The wartime definitions' own slot type, so the DLL's reactive CITY_ASSAULT starts (no slot
+    check) pick only planned definitions. The 0.3 walled odds are kept, inert while
+    SelfStart is false (below); AGENTS.md "Wartime assault slots".
+    -->
+    <Update>
+      <Where OperationName="Wartime Attack Walled City" />
+      <Set OperationType="ROSE_WARTIME_ASSAULT" MinOddsOfSuccess="0.3" />
+    </Update>
+    <Update>
+      <Where OperationName="Wartime Attack Enemy City" />
+      <Set OperationType="ROSE_WARTIME_ASSAULT" />
+    </Update>
+    <!--
+    The engine starts no wartime assault of its own: the wartime slot belongs to the war
+    director's Rose Wartime Siege; true restores them;
+    AGENTS.md "Rose Wartime Siege operation and the engine's wartime assaults off".
+    -->
+    <Update>
+      <Where OperationName="Wartime Attack Walled City" />
+      <Set SelfStart="false" />
+    </Update>
+    <Update>
+      <Where OperationName="Wartime Attack Enemy City" />
+      <Set SelfStart="false" />
+    </Update>
+
+    <!-- City Defense gets an operation type, so its slot limit applies; AGENTS.md "City Defense cap". -->
+    <Update>
+      <Where OperationName="City Defense" />
+      <Set OperationType="OP_DEFENSE" />
+    </Update>
+
+    <!--
+    kept; inert while Nuclear Assault is removed from AllowedOperations. Priority 4 is the
+    ceiling (trees tick only in passes 4 to 0); AGENTS.md "Nuclear Assault fix".
+    -->
+    <Update>
+      <Where OperationName="Nuclear Assault" />
+      <Set Priority="4" />
+    </Update>
+
+    <!-- Barbarian camps within 12 tiles; AGENTS.md "Simple Operation Attack (barbarian camps)". -->
+    <Update>
+      <Where OperationName="Attack Barb Camp" />
+      <Set MaxTargetDistInRegion="12" MaxTargetDistInArea="12" />
+    </Update>
+  </AiOperationDefs>
+
+  <!--
+  The engine's Nuclear Assault is off: Rose Nuclear Strike (trees/Rose_Nuclear_Strike.xml)
+  launches instead; removing this Delete turns it back on; AGENTS.md "Rose Nuclear Strike operation".
+  -->
+  <AllowedOperations>
+    <Delete OperationDef="Nuclear Assault" />
+  </AllowedOperations>
+
+</GameInfo>

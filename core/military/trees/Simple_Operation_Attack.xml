@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Simple Operation Attack (barbarian camps; also Barb Camp Tech Boost): the base tree plus failing Turn Limiters 13 (move phase) and 19 (attack phase).
+Node ids: base 0-12 unchanged, base 13-17 are 14-18, base 18-21 are 20-23 (every JumpTo 22 is 24). Fresh games only.
+Hand-edited; checked by .scratch/w20-w21/verify_xml.py.
+AGENTS.md "Simple Operation Attack (barbarian camps)".
+-->
+<GameInfo>
+
+  <BehaviorTreeNodes>
+    <Delete TreeName="Simple Operation Attack" />
+
+    <!-- Root: defense, attacks, target checks; then assembly. -->
+    <Row NodeType="Concurrent" NodeId="0" TreeName="Simple Operation Attack" JumpTo="24" />
+      <Row NodeType="Operation Defend Units" NodeId="1" TreeName="Simple Operation Attack" />
+      <Row NodeType="Operation Attack Units" NodeId="2" TreeName="Simple Operation Attack" />
+      <Row NodeType="Operation Change Target" NodeId="3" TreeName="Simple Operation Attack" />
+      <Row NodeType="Sequence" NodeId="4" TreeName="Simple Operation Attack" JumpTo="24" />
+        <Row NodeType="Decode Trigger" NodeId="5" TreeName="Simple Operation Attack" />
+        <Row NodeType="Concurrent" NodeId="6" TreeName="Simple Operation Attack" JumpTo="13" />
+          <Row NodeType="Contract Manager Decorator" NodeId="7" TreeName="Simple Operation Attack" JumpTo="9" />
+            <Row NodeType="Recruit Units" NodeId="8" TreeName="Simple Operation Attack" />
+          <Row NodeType="Operation Attack Units" NodeId="9" TreeName="Simple Operation Attack" />
+          <Row NodeType="Priority" NodeId="10" TreeName="Simple Operation Attack" JumpTo="13" />
+            <Row NodeType="Operation Is Ready" NodeId="11" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Move" NodeId="12" TreeName="Simple Operation Attack" />
+        <!-- Move phase, ended by limiter 13 after about 10 turns. -->
+        <Row NodeType="Turn Limiter" NodeId="13" TreeName="Simple Operation Attack" JumpTo="19" />
+          <Row NodeType="Concurrent" NodeId="14" TreeName="Simple Operation Attack" JumpTo="19" />
+            <Row NodeType="Operation Change Target" NodeId="15" TreeName="Simple Operation Attack" />
+            <Row NodeType="Recruit Units" NodeId="16" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Attack Units" NodeId="17" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Move" NodeId="18" TreeName="Simple Operation Attack" />
+        <!-- Attack phase, ended by limiter 19 after about 12 turns. -->
+        <Row NodeType="Turn Limiter" NodeId="19" TreeName="Simple Operation Attack" JumpTo="24" />
+          <Row NodeType="Concurrent" NodeId="20" TreeName="Simple Operation Attack" JumpTo="24" />
+            <Row NodeType="Recruit Units" NodeId="21" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Attack Units" NodeId="22" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Attack" NodeId="23" TreeName="Simple Operation Attack" />
+  </BehaviorTreeNodes>
+
+  <TreeData>
+    <Delete TreeName="Simple Operation Attack" />
+
+    <!-- Root and assembly: base data, plus recruit range 14 on Recruit Units 8 (DefnId 2; base has no row). -->
+    <Row DefnId="0" NodeId="1" TreeName="Simple Operation Attack" DefaultData="50" />
+    <Row DefnId="0" NodeId="2" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="2" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="2" NodeId="2" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="0" NodeId="3" TreeName="Simple Operation Attack" DefaultData="-100" />
+    <Row DefnId="1" NodeId="3" TreeName="Simple Operation Attack" DefaultData="-100" />
+    <Row DefnId="0" NodeId="5" TreeName="Simple Operation Attack" Tag="Unused" />
+    <Row DefnId="1" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="2" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="3" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="4" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="5" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="6" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="7" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="8" NodeId="5" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="7" TreeName="Simple Operation Attack" Tag="Recruitment Contract" />
+    <Row DefnId="1" NodeId="7" TreeName="Simple Operation Attack" />
+    <Row DefnId="2" NodeId="7" TreeName="Simple Operation Attack" DefaultData="5" />
+    <Row DefnId="3" NodeId="7" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="0" NodeId="8" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="1" NodeId="8" TreeName="Simple Operation Attack" Tag="Recruitment Contract" />
+    <Row DefnId="2" NodeId="8" TreeName="Simple Operation Attack" DefaultData="14" />
+    <Row DefnId="4" NodeId="8" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="9" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="9" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="0" NodeId="12" TreeName="Simple Operation Attack" DefaultData="0" />
+    <Row DefnId="1" NodeId="12" TreeName="Simple Operation Attack" DefaultData="2" />
+    <Row DefnId="2" NodeId="12" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="3" NodeId="12" TreeName="Simple Operation Attack" DefaultData="2" />
+    <!-- Limiter 13: Turns to Run 20 (unflagged limiters fail at about half), Fail at Limit ends the operation. -->
+    <Row DefnId="0" NodeId="13" TreeName="Simple Operation Attack" DefaultData="20" />
+    <Row DefnId="1" NodeId="13" TreeName="Simple Operation Attack" DefaultData="true" />
+    <!-- Move phase: base data. -->
+    <Row DefnId="0" NodeId="15" TreeName="Simple Operation Attack" DefaultData="0" />
+    <Row DefnId="1" NodeId="15" TreeName="Simple Operation Attack" DefaultData="-2" />
+    <Row DefnId="0" NodeId="16" TreeName="Simple Operation Attack" DefaultData="True" />
+    <Row DefnId="4" NodeId="16" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="17" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="17" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="0" NodeId="18" TreeName="Simple Operation Attack" DefaultData="1" />
+    <Row DefnId="1" NodeId="18" TreeName="Simple Operation Attack" DefaultData="2" />
+    <Row DefnId="2" NodeId="18" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="3" NodeId="18" TreeName="Simple Operation Attack" DefaultData="2" />
+    <!-- Limiter 19: Turns to Run 24 (about 12 turns), Fail at Limit ends the operation. -->
+    <Row DefnId="0" NodeId="19" TreeName="Simple Operation Attack" DefaultData="24" />
+    <Row DefnId="1" NodeId="19" TreeName="Simple Operation Attack" DefaultData="true" />
+    <!-- Attack phase: base data. -->
+    <Row DefnId="0" NodeId="21" TreeName="Simple Operation Attack" DefaultData="True" />
+    <Row DefnId="2" NodeId="21" TreeName="Simple Operation Attack" DefaultData="8" />
+    <Row DefnId="4" NodeId="21" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="22" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="22" TreeName="Simple Operation Attack" DefaultData="false" />
+  </TreeData>
+
+</GameInfo>

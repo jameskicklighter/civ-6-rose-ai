@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Nuclear Assault: base tree kept, TreeData tuned in place (base node ids). Its team and definition
+changes are in ../Operations.xml. AGENTS.md "Nuclear Assault fix".
+kept; inert while Nuclear Assault is removed from AllowedOperations (../Operations.xml).
+-->
+<GameInfo>
+
+  <TreeData>
+    <!-- Contract Manager 7: tag its contract like Recruit node 8's Contract ID (base data bug), so a delivery unit can be contracted. -->
+    <Update>
+      <Where DefnId="0" NodeId="7" TreeName="Nuclear Assault" />
+      <Set Tag="Initial Recruits" />
+    </Update>
+    <!-- Recruit nodes 8 and 13: Allow Stealing, so a delivery unit can come from a lower-priority siege. -->
+    <Row DefnId="6" NodeId="8" TreeName="Nuclear Assault" DefaultData="true" />
+    <Row DefnId="6" NodeId="13" TreeName="Nuclear Assault" DefaultData="true" />
+  </TreeData>
+
+</GameInfo>

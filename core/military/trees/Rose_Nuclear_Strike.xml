@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Rose Nuclear Strike: a new tree and operation, started only by the gameplay scripts with one delivery unit.
+The base Nuclear Assault tree without nodes 2 (Defend Units), 6-9 (contract, recruit) and 12-14, plus a
+failing Turn Limiter; node ids 0-9 (base 1, 10 and 15 are 1, 5 and 9). Hand-written, base data copied.
+AGENTS.md "Rose Nuclear Strike operation", 'Known engine behaviour: nuclear operations'.
+-->
+<GameInfo>
+
+  <BehaviorTrees>
+    <Row TreeName="Rose Nuclear Strike" />
+  </BehaviorTrees>
+
+  <!-- Sequence [Decode Trigger, Concurrent [Will use nukes, Sequence [Lock Units, Turn Limiter [Concurrent [Launch nuke, Move]]]]]. -->
+  <BehaviorTreeNodes>
+    <Row NodeType="Sequence" NodeId="0" TreeName="Rose Nuclear Strike" JumpTo="10" />
+      <Row NodeType="Decode Trigger" NodeId="1" TreeName="Rose Nuclear Strike" />
+      <Row NodeType="Concurrent" NodeId="2" TreeName="Rose Nuclear Strike" JumpTo="10" />
+        <Row NodeType="Will use nukes" NodeId="3" TreeName="Rose Nuclear Strike" />
+        <Row NodeType="Sequence" NodeId="4" TreeName="Rose Nuclear Strike" JumpTo="10" />
+          <Row NodeType="Lock Units" NodeId="5" TreeName="Rose Nuclear Strike" />
+          <Row NodeType="Turn Limiter" NodeId="6" TreeName="Rose Nuclear Strike" JumpTo="10" />
+            <Row NodeType="Concurrent" NodeId="7" TreeName="Rose Nuclear Strike" JumpTo="10" />
+              <Row NodeType="Operation Launch nuke" NodeId="8" TreeName="Rose Nuclear Strike" />
+              <Row NodeType="Operation Move" NodeId="9" TreeName="Rose Nuclear Strike" />
+  </BehaviorTreeNodes>
+  <TreeData>
+    <!-- Base node 1, Decode Trigger. -->
+    <Row DefnId="0" NodeId="1" TreeName="Rose Nuclear Strike" Tag="Unused" />
+    <Row DefnId="1" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="2" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="3" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="4" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="5" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="6" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="7" NodeId="1" TreeName="Rose Nuclear Strike" />
+    <Row DefnId="8" NodeId="1" TreeName="Rose Nuclear Strike" Tag="Present Value" />
+    <!-- Base node 10, Lock Units (lock, signal readiness). -->
+    <Row DefnId="0" NodeId="5" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <Row DefnId="1" NodeId="5" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <!-- Turn Limiter 6: Turns to Run 4 (about 2 turns), Fail at Limit ends an operation that did not launch. -->
+    <Row DefnId="0" NodeId="6" TreeName="Rose Nuclear Strike" DefaultData="4" />
+    <Row DefnId="1" NodeId="6" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <!-- Concurrent 7: Exit on Success, so the launch tick ends the operation (Launch nuke returns SUCCESS). -->
+    <Row DefnId="1" NodeId="7" TreeName="Rose Nuclear Strike" DefaultData="true" />
+    <!-- Base node 15, Operation Move. -->
+    <Row DefnId="0" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="1" />
+    <Row DefnId="1" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="4" />
+    <Row DefnId="2" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="1" />
+    <Row DefnId="3" NodeId="9" TreeName="Rose Nuclear Strike" DefaultData="2" />
+  </TreeData>
+
+  <!--
+  Never self-started; a fixed target (AllowTargetUpdate false); world reach -1 because a submarine's
+  rally plot is water; OP_NUCLEAR slots are shared with the engine's Nuclear Assault, which is off.
+  -->
+  <AiOperationDefs>
+    <Row OperationName="Rose Nuclear Strike" TargetType="TARGET_ENEMY_COMBAT_DISTRICT" TargetParameter="1"
+      EnemyType="WAR" BehaviorTree="Rose Nuclear Strike" Priority="4"
+      MaxTargetDistInRegion="-1" MaxTargetDistInArea="-1" MaxTargetDistInWorld="-1"
+      MaxTargetStrength="-1" MaxTargetDefense="-1" MinOddsOfSuccess="0"
+      SelfStart="false" MustBeAtWar="true" MustHaveNukes="true" MustHaveUnits="-1"
+      OperationType="OP_NUCLEAR" AllowTargetUpdate="false" />
+  </AiOperationDefs>
+  <!-- One delivery unit, added by Lua; -5 is the "required strength 0" sentinel. -->
+  <AiTeams>
+    <Row TeamName="Rose Nuclear Attack" />
+  </AiTeams>
+  <AiOperationTeams>
+    <Row TeamName="Rose Nuclear Attack" OperationName="Rose Nuclear Strike" MinUnits="0"
+      InitialStrengthAdvantage="-5" OngoingStrengthAdvantage="-5" />
+  </AiOperationTeams>
+  <OpTeamRequirements>
+    <Row TeamName="Rose Nuclear Attack" AiType="UNITTYPE_NUCLEAR" MinNumber="0" MaxNumber="1" />
+  </OpTeamRequirements>
+  <AllowedOperations>
+    <Row ListType="Default_List" OperationDef="Rose Nuclear Strike" />
+  </AllowedOperations>
+
+</GameInfo>

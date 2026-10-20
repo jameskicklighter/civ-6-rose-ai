@@ -101,9 +101,13 @@ WHERE ListType = 'BaseOperationsLimits'
 -- so planned attacks (half of them on city-states during major wars) held the
 -- slots and majors started 5 wartime assaults against 225 planned. The DLL's
 -- selection loop skips a candidate whose type is full and moves on, so separate
--- types let both start. For majors the per-war slot moves to the new type and
--- the total is unchanged: 1 planned (+1 with the military-victory strategy)
--- plus 1 wartime per war. The DLL looks up only the name CITY_ASSAULT, for
+-- types let both start. The per-war CITY_ASSAULT slot moved to the new type in
+-- round 2; since round 7 (W31, 2026-10-15) the new type has one slot in all,
+-- whatever the number of wars (BaseOperationsLimits 1, no per-war row), and
+-- At War removes the planned slot (AI_Strategies.sql), so a major at war runs
+-- one wartime assault (two with War Advantage, +1 for a Military Victory AI's
+-- planned slot). In the 2026-10-15 game Khmer, in two wars, ran a planned and
+-- two wartime sieges with seven units. The DLL looks up only the name CITY_ASSAULT, for
 -- reactive starts against an observed foreign operation, which now use the
 -- planned definitions; HasOperationAgainst (war declaration) ignores the type.
 -- The definitions are retyped in AI_BehaviorTrees.xml. Military Recovery's -1
@@ -119,21 +123,16 @@ SET Value = 0
 WHERE ListType = 'PerWarOperationsLimits'
   AND Item = 'CITY_ASSAULT';
 
+-- The base list is shared by majors and city-states (Operations.xml attaches
+-- it to TRAIT_LEADER_MAJOR_CIV and MINOR_CIV_DEFAULT_TRAIT), so city-states also
+-- get one wartime slot. They started more wartime than planned assaults (8 and
+-- 6 against 1 and 0 in two tests); from round 2 to round 7 they had one per war
+-- through PerWarOperationsLimits attached to MINOR_CIV_DEFAULT_TRAIT, which is
+-- gone with the per-war row. Both wartime definitions need MustBeAtWar, so the
+-- slot is idle at peace. The Free Cities player is unaffected: its operation
+-- list holds only "Free Cities Raid".
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('PerWarOperationsLimits', 'ROSE_WARTIME_ASSAULT', 1, 1);
-
--- City-states started more wartime than planned assaults (8 and 6 against 1
--- and 0 in the last two tests) but had no per-war list, so without one they
--- could never start a wartime assault again. Attach the same per-war list to
--- them rather than a second base list: whether the engine adds two leader lists
--- of one system together is unverified, and a replaced base list would cost
--- them City Defense. They keep their planned slot, so a city-state gains one
--- wartime slot per war; they start planned assaults rarely (3, 1, 0 in three tests).
--- The Free Cities player is unaffected: its operation list holds only
--- "Free Cities Raid". Anything added to PerWarOperationsLimits later also
--- applies to city-states.
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('PerWarOperationsLimits', 'MINOR_CIV_DEFAULT_TRAIT', 'PerWarOperationTypes');
+('BaseOperationsLimits', 'ROSE_WARTIME_ASSAULT', 1, 1);
 
 -- City Defense has no OperationType in base data, so nothing limited how many
 -- ran at once: up to 12 per AI in the 2026-10-04 test, holding about a quarter

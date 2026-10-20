@@ -45,7 +45,7 @@ print("Rose AI: Loading gameplay support script");
 
 -- Per-turn diagnostic output (the stuck Trader lines). Off for release; errors,
 -- grants, strategy and austerity changes and policy repairs always print.
-local ROSE_VERBOSE_LOGS = false;
+local ROSE_VERBOSE_LOGS = true;
 
 -- War strategies use Forbidden Lua conditions with no positive condition, so
 -- an unanswered check could leave them allowed. Register the callbacks first:
@@ -1203,8 +1203,9 @@ end
 -- use-nukes action (Gandhi, aggressive-military leaders, and every AI while
 -- STRATEGY_ROSE_AT_WAR is active, W22); otherwise the operation ends on its
 -- first turn (visible only in AI_Operation.csv). Lua cannot read the war
--- value, so enemies we already run an operation against (HasOperationAgainst)
--- come first: both launches in 20261009b matched one.
+-- value, so enemies we already run an operation against (HasOperationAgainst,
+-- the existence form since round 9) come first: both launches in 20261009b
+-- matched one.
 --
 -- Gameplay Lua cannot read which AI operation holds a unit, an operation's
 -- target, or whether it is still running (UnitManager.GetOperationTypeName
@@ -1492,19 +1493,33 @@ local function CountPlotsWithin(tPlots, iX, iY, iDistance, iSkipID)
 	return iCount;
 end
 
--- True when one of our operations targets iEnemyID (any operation type; the
--- only operation read gameplay Lua has). XP2 DLL binding: (player, bool, int,
--- int), the bool false asks only whether an operation targets that player.
+-- Whether any live operation of ours (any type, scripted ones included)
+-- targets iEnemyID: true, false, or nil when it cannot be read. The only
+-- operation read gameplay Lua has. XP2 DLL binding (round 8 trace,
+-- 2026-10-17): HasOperationAgainst(player, requireReady, maxDist,
+-- teamPlotSlot); slot -1 is the existence test (the two-argument call reads
+-- slot 0, "a team unit stands on the rally plot"). Confirmed at runtime in
+-- 20261018: it reads yes from a director siege's order turn to the turn
+-- after its "Operation complete" (7 of 7 conclusive orders). It cannot count:
+-- one yes may be several operations.
 local bOperationReadWarned = false;
-local function HasOperationAgainst(pPlayer, iEnemyID)
+local function ReadOperationExists(pPlayer, iEnemyID)
 	local pMilitaryAI = pPlayer:GetAi_Military();
-	if pMilitaryAI == nil then return false; end
-	local bOk, bHas = pcall(function() return pMilitaryAI:HasOperationAgainst(iEnemyID, false); end);
-	if not bOk and not bOperationReadWarned then
-		bOperationReadWarned = true;
-		print("Rose AI ERROR: HasOperationAgainst failed; nuclear targets ignore our operations: " .. tostring(bHas));
+	if pMilitaryAI == nil then return nil; end
+	local bOk, bHas = pcall(function() return pMilitaryAI:HasOperationAgainst(iEnemyID, false, 0, -1); end);
+	if not bOk then
+		if not bOperationReadWarned then
+			bOperationReadWarned = true;
+			print("Rose AI ERROR: HasOperationAgainst failed; nuclear targets, the war director and the city-state report ignore our operations: " .. tostring(bHas));
+		end
+		return nil;
 	end
-	return bOk and bHas == true;
+	if bHas == true or bHas == false then return bHas; end
+	return nil;
+end
+
+local function HasOperationAgainst(pPlayer, iEnemyID)
+	return ReadOperationExists(pPlayer, iEnemyID) == true;
 end
 
 -- Returns the chosen target { City, Owner, Delivery, Operation, Besiegers,
@@ -1787,6 +1802,1014 @@ if GameEvents.OnNuclearWeaponDetonated ~= nil then
 	end);
 end
 
+-- The war director keeps its helpers and state inside one do-block: the main
+-- chunk is near Lua 5.1's limit of 200 local variables. TryWarDirector and
+-- ReadDirectorOrders (read by the operation read probe) are the exports.
+local TryWarDirector, ReadDirectorOrders;
+do
+
+-- ============================================================================
+-- Wartime war director (round 7, HANDOFF W10, 2026-10-15; fixed in round 8,
+-- 2026-10-17; order rules and end signal in round 9, 2026-10-18)
+--
+-- The W10 doctrine (2026-10-15): one army, one target at a time; the target
+-- is usually the enemy city closest to us that we can hold; keep attacking it
+-- when it builds walls; keep going until we are at a disadvantage; with a
+-- supreme advantage take city after city. The engine's wartime assaults did
+-- none of this in the 2026-10-15 game (targets chosen by a value formula that
+-- favors city-states and capitals, an unwalled attack ending the turn walls go
+-- up, three assaults for a seven-unit army). Here an eligible AI at war with a
+-- major for DIRECTOR_MIN_WAR_TURNS turn starts orders one siege itself: "Rose
+-- Wartime Siege" (AI_BehaviorTrees.xml, Siege City Assault tree, Priority 4
+-- so the AI's own planned sieges at 3 cannot take its units in assembly),
+-- started with StartScriptedOperationWithTargetAndRally on the chosen city
+-- with the rally at the sent unit nearest the target that stands on land at
+-- least DIRECTOR_RALLY_MIN_DISTANCE tiles from it (round 8: with the rally at
+-- our city, America's army walked back home under fire, 20261017 t66-71).
+--
+-- The army is chosen here. A scripted start marks the operation ready at once
+-- (XP2 DLL 0x4D216C sets the flag IsReady 0x4DE580 returns first; 20261009b
+-- logged a scripted team "Total: 0. Ready: YES"; SetScriptedOperationReady
+-- 0x4D1030 can only set it), so team minimums are never enforced, the
+-- assembly phase's Recruit and Contract Manager never run, and no production
+-- contract is issued. So, as Firaxis' Nubia scenario does (NubiaScenario.lua
+-- 639-653), units are added with AddUnitToScriptedOperation: siege units
+-- first (at most DIRECTOR_MAX_STRIKE, nearest the target first): land bombard
+-- units within DIRECTOR_GATHER_RADIUS tiles of the rally city, Battering Rams
+-- and Siege Towers there only against Ancient or Medieval walls (round 9 item
+-- 5), then bombers whose range reaches the target; then our other healthy
+-- land combat units there, nearest the target first, up to DIRECTOR_MAX_UNITS.
+-- Land units on one of our city centres (the garrisons), recon units and
+-- units with DIRECTOR_MAX_DAMAGE damage or more stay home. The siege's later
+-- Recruit nodes may still add units within 12 tiles and log production
+-- contracts ("Contract for: UNIT_TREBUCHET / BOMBER / ARTILLERY" under the
+-- director's operation in 20261017).
+--
+-- Target, among the revealed cities of majors we are at war with (never a
+-- city-state): within DIRECTOR_REACH tiles of one of our cities
+-- (DIRECTOR_REACH_ADVANTAGE while War Advantage is latched), nearest to our
+-- nearest city first, then the most populous. A city whose defense strength
+-- is more than DIRECTOR_DEFENSE_MARGIN above the best bombard strength of a
+-- unit we own (aircraft included) or a land unit we can train is skipped,
+-- under War Advantage too since round 9 (Beijing 77 and Constantinople 100
+-- against bombard 55 were ordered under its waiver in 20261018 and failed).
+-- Walls and defense are read from the city centre under pcall (gameplay
+-- District table per the DLL; walls as outer defense hit points, the Pirates
+-- scenario's call); if the defense read fails the rule is skipped (printed
+-- once), if the walls read fails the city counts as walled.
+--
+-- Round 9 order rules (20261018: 4 of 18 orders took their city, all of
+-- population 1-4; each refusal prints its rule):
+-- - No order during Military Recovery ("until we are at a disadvantage"),
+--   nor while an enemy major has DIRECTOR_THREAT_UNITS or more visible land
+--   combat units on our land within DIRECTOR_THREAT_RADIUS tiles of one of
+--   our cities: City Defense, at the same priority, took the armies of Khmer
+--   (three times), China and Ethiopia the turn after their orders. Units in
+--   their own territory do not count (round 9 decision, 2026-10-18: a border garrison
+--   must not stop the war); units on the tiles of a city we just took do,
+--   since those tiles become ours.
+-- - For each candidate city, nearest first, the first that passes is
+--   ordered: an army of DIRECTOR_MIN_UNITS land units; two siege units when
+--   the city has walls or a defense of DIRECTOR_STRONG_DEFENSE or more, none
+--   otherwise (round 9 decision, 2026-10-18: Sodo fell to an army without any); the rally
+--   (the sent unit nearest the target) within DIRECTOR_MAX_ARMY_DISTANCE tiles
+--   of the city (0 of 7 orders from 6 or more tiles succeeded, the captures
+--   were at 3-5); and a land route: a path from the rally unit to a land plot
+--   next to the city of at most DIRECTOR_PATH_FACTOR times the distance
+--   (UnitManager.GetMoveToPath, gameplay table per the DLL; Mapuche's army
+--   stood still 12 turns before Constantinople, Greece's walked around
+--   Byzantium), or the same landmass when no path can be read.
+--
+-- An engine operation against the same enemy does not hold the director
+-- (round 8's rule (d), dropped in round 9, 2026-10-18: with the
+-- existence form it would have waited out every planned siege that declared
+-- a war, Persia's against China from t80 to t110 in 20261018, and missed the
+-- Guangzhou capture).
+--
+-- Pacing comes from the order record (player property, sorted
+-- "enemy=turn@x@y@unitIDs" entries; "enemy=turn@x@y@e@endTurn" once ended). An
+-- order locks its city and its units for DIRECTOR_ORDER_LOCK turns (a siege
+-- can run about 45: 15 of assembly, 11 of siege phase, 20 of final assault),
+-- until its city is no longer that enemy's (we took it: the capture event,
+-- which also clears the pause below; or anyone else did, or it was razed) or
+-- the war with that enemy is over, and since round 9 until no operation of
+-- ours targets that enemy any more (HasOperationAgainst's existence form,
+-- asked at each run for every enemy with a live order; read "no" one turn
+-- after "Operation complete" in all 7 conclusive cases of 20261018, never
+-- earlier; it cannot count, so two orders against one enemy end together,
+-- and an engine operation against the same enemy keeps the order alive). An
+-- ended order frees its units at once, keeps its city locked
+-- DIRECTOR_FAILED_CITY_LOCK turns from its end (round 9 decision, 2026-10-18: otherwise
+-- War Advantage, which has no pause, could restart a failed siege the next
+-- turn), and still counts for the pause: one order per enemy per
+-- DIRECTOR_ENEMY_COOLDOWN turns from the order, except under War Advantage
+-- (its second slot). A refused start (-1 when the
+-- ROSE_WARTIME_ASSAULT slot is full, 0 on an early refusal) waits
+-- DIRECTOR_RETRY_TURNS. On the turn after an order the director prints how
+-- many of the sent units still have no unit command. All state is in player
+-- properties written from gameplay events, and every choice is ordered by
+-- distance and ids, so every machine decides alike.
+-- ============================================================================
+local WAR_DIRECTOR_ENABLED = true;
+local DIRECTOR_OPERATION_NAME = "Rose Wartime Siege";
+local DIRECTOR_MIN_WAR_TURNS = 3;
+local DIRECTOR_REACH = 12;
+local DIRECTOR_REACH_ADVANTAGE = 16;
+local DIRECTOR_DEFENSE_MARGIN = 10;
+local DIRECTOR_RETRY_TURNS = 3;
+local DIRECTOR_ENEMY_COOLDOWN = 25;
+local DIRECTOR_GATHER_RADIUS = 10;
+local DIRECTOR_MIN_UNITS = 6;
+local DIRECTOR_MAX_UNITS = 12;
+local DIRECTOR_MAX_STRIKE = 3;
+local DIRECTOR_MAX_DAMAGE = 50;
+local DIRECTOR_ORDER_LOCK = 40;
+local DIRECTOR_FAILED_CITY_LOCK = 15;
+local DIRECTOR_RALLY_MIN_DISTANCE = 3;
+local DIRECTOR_MAX_ARMY_DISTANCE = 6;
+local DIRECTOR_PATH_FACTOR = 2;
+local DIRECTOR_THREAT_UNITS = 3;
+local DIRECTOR_THREAT_RADIUS = 3;
+local DIRECTOR_STRONG_DEFENSE = 40;
+local DIRECTOR_ORDERS_PROPERTY = "ROSE_DIRECTOR_ORDERS";
+local DIRECTOR_NEXT_ATTEMPT_PROPERTY = "ROSE_DIRECTOR_NEXT_ATTEMPT";
+
+local iCityCenterDistrict = (GameInfo.Districts ~= nil and GameInfo.Districts["DISTRICT_CITY_CENTER"] ~= nil)
+	and GameInfo.Districts["DISTRICT_CITY_CENTER"].Index or nil;
+local iDirections = (DirectionTypes ~= nil and DirectionTypes.NUM_DIRECTION_TYPES) or 6;
+
+-- Land units with a bombard strength that any civilization can train (unique
+-- units count only when owned), with the tech that unlocks each; the land
+-- units the director may send: land combat units other than recon (Siege when
+-- they have a bombard strength; base siege units are
+-- FORMATION_CLASS_LAND_COMBAT with PROMOTION_CLASS_SIEGE), plus the two
+-- wall-breaking support units (Breaker); bombers (air units with a bombard
+-- strength) with their range; and every land combat formation unit, for the
+-- threat rule.
+local tBombardUnits = {};
+local tArmyUnits = {};
+local tAirSiegeUnits = {};
+local tLandCombatUnits = {};
+for kUnit in GameInfo.Units() do
+	if kUnit.Domain == "DOMAIN_LAND" and (kUnit.Bombard or 0) > 0 and kUnit.TraitType == nil
+		and kUnit.CanTrain ~= false and kUnit.CanTrain ~= 0 then
+		table.insert(tBombardUnits, { Bombard = kUnit.Bombard, Tech = kUnit.PrereqTech });
+	end
+	if kUnit.Domain == "DOMAIN_LAND" then
+		local bBreaker = kUnit.UnitType == "UNIT_BATTERING_RAM" or kUnit.UnitType == "UNIT_SIEGE_TOWER";
+		if bBreaker or (kUnit.FormationClass == "FORMATION_CLASS_LAND_COMBAT"
+			and kUnit.PromotionClass ~= "PROMOTION_CLASS_RECON"
+			and math.max(kUnit.Combat or 0, kUnit.RangedCombat or 0, kUnit.Bombard or 0) > 0) then
+			tArmyUnits[kUnit.Index] = { Siege = not bBreaker and (kUnit.Bombard or 0) > 0, Breaker = bBreaker };
+		end
+		if kUnit.FormationClass == "FORMATION_CLASS_LAND_COMBAT" then tLandCombatUnits[kUnit.Index] = true; end
+	elseif kUnit.Domain == "DOMAIN_AIR" and (kUnit.Bombard or 0) > 0 then
+		tAirSiegeUnits[kUnit.Index] = { Range = kUnit.Range or 0, WMD = kUnit.WMDCapable == true or kUnit.WMDCapable == 1 };
+	end
+end
+
+-- Renaissance Walls and their unique replacements (Georgia's Tsikhe): a
+-- Battering Ram or Siege Tower counts as a siege unit only against lower
+-- walls (round 9 item 5).
+local tLateWalls = {};
+if GameInfo.Buildings ~= nil and GameInfo.Buildings["BUILDING_STAR_FORT"] ~= nil then
+	table.insert(tLateWalls, GameInfo.Buildings["BUILDING_STAR_FORT"].Index);
+	if GameInfo.BuildingReplaces ~= nil then
+		for kRow in GameInfo.BuildingReplaces() do
+			if kRow.ReplacesBuildingType == "BUILDING_STAR_FORT" and GameInfo.Buildings[kRow.CivUniqueBuildingType] ~= nil then
+				table.insert(tLateWalls, GameInfo.Buildings[kRow.CivUniqueBuildingType].Index);
+			end
+		end
+	end
+end
+
+local tDirectorReason = {};
+local bDefenseReadWarned = false;
+
+local function ReportDirectorReason(iPlayerID, sReason)
+	if tDirectorReason[iPlayerID] == sReason then return; end
+	tDirectorReason[iPlayerID] = sReason;
+	if sReason ~= nil then
+		print("Rose AI: War director not ordered for player " .. iPlayerID
+			.. " turn " .. Game.GetCurrentGameTurn() .. ": " .. sReason);
+	end
+end
+
+-- Recorded orders, "enemyID=turn@x@y@unitIDs" entries (comma-separated unit
+-- ids), "enemyID=turn@x@y@e@endTurn" once ended (round 7's "@e@unitIDs" meant
+-- ended too; its end turn reads as the order turn), sorted (an enemy may have
+-- two under War Advantage).
+function ReadDirectorOrders(pPlayer)
+	local tOrders = {};
+	local sValue = pPlayer:GetProperty(DIRECTOR_ORDERS_PROPERTY);
+	if type(sValue) == "string" then
+		for sEntry in string.gmatch(sValue, "[^;]+") do
+			local sID, sTurn, sX, sY, sFlag, sUnits = string.match(sEntry, "^(%d+)=(%-?%d+)@(%-?%d+)@(%-?%d+)@?(%a*)@?([%d,]*)$");
+			if sID ~= nil then
+				local kOrder = { Enemy = tonumber(sID), Turn = tonumber(sTurn), X = tonumber(sX), Y = tonumber(sY),
+					Ended = sFlag == "e", Units = {} };
+				if kOrder.Ended then
+					kOrder.EndTurn = tonumber(sUnits) or kOrder.Turn;
+				else
+					for sUnit in string.gmatch(sUnits, "%d+") do table.insert(kOrder.Units, tonumber(sUnit)); end
+				end
+				table.insert(tOrders, kOrder);
+			end
+		end
+	end
+	return tOrders;
+end
+
+local function WriteDirectorOrders(pPlayer, tOrders)
+	local tParts = {};
+	for _, kOrder in ipairs(tOrders) do
+		local tUnits = {};
+		for _, iUnit in ipairs(kOrder.Units or {}) do table.insert(tUnits, tostring(iUnit)); end
+		table.insert(tParts, kOrder.Enemy .. "=" .. kOrder.Turn .. "@" .. kOrder.X .. "@" .. kOrder.Y
+			.. (kOrder.Ended and ("@e@" .. kOrder.EndTurn) or ("@" .. table.concat(tUnits, ","))));
+	end
+	table.sort(tParts);
+	local sValue = table.concat(tParts, ";");
+	local sOld = pPlayer:GetProperty(DIRECTOR_ORDERS_PROPERTY);
+	if (type(sOld) == "string" and sOld or "") ~= sValue then
+		pPlayer:SetProperty(DIRECTOR_ORDERS_PROPERTY, sValue);
+	end
+end
+
+-- Keeps an order while we are still at war with its enemy and its city is
+-- still that enemy's: DIRECTOR_ORDER_LOCK turns while live; once ended, while
+-- it still counts for the pause (DIRECTOR_ENEMY_COOLDOWN turns from its order)
+-- or still locks its city (DIRECTOR_FAILED_CITY_LOCK turns from its end). A
+-- live order from an earlier turn ends when no operation of ours targets its
+-- enemy any more (the existence form; an unreadable answer keeps it). Returns
+-- the kept orders and each enemy's latest order turn (FindDirectorTargets
+-- applies the pause and the city lock).
+local function PruneDirectorOrders(pPlayer, iTurn, tSince)
+	local tKept = {};
+	local tLatest = {};
+	local tExists = {};
+	for _, kOrder in ipairs(ReadDirectorOrders(pPlayer)) do
+		local pCity = CityManager.GetCityAt(kOrder.X, kOrder.Y);
+		local bKeep = iTurn - kOrder.Turn < DIRECTOR_ORDER_LOCK;
+		if kOrder.Ended then
+			bKeep = iTurn - kOrder.Turn < DIRECTOR_ENEMY_COOLDOWN or iTurn - kOrder.EndTurn < DIRECTOR_FAILED_CITY_LOCK;
+		end
+		if bKeep and tSince[kOrder.Enemy] ~= nil
+			and pCity ~= nil and pCity:GetOwner() == kOrder.Enemy then
+			if not kOrder.Ended and kOrder.Turn < iTurn then
+				if tExists[kOrder.Enemy] == nil then
+					local bExists = ReadOperationExists(pPlayer, kOrder.Enemy);
+					tExists[kOrder.Enemy] = bExists == nil and "?" or bExists;
+				end
+				if tExists[kOrder.Enemy] == false then
+					kOrder.Ended = true;
+					kOrder.EndTurn = iTurn;
+					kOrder.Units = {};
+					print("Rose AI: War director order of player " .. pPlayer:GetID() .. " turn " .. kOrder.Turn
+						.. " against player " .. kOrder.Enemy .. " plot (" .. kOrder.X .. "," .. kOrder.Y .. ") ended by turn "
+						.. iTurn .. ": no operation of ours against player " .. kOrder.Enemy .. "; its units are free, its city locked "
+						.. DIRECTOR_FAILED_CITY_LOCK .. " turns");
+				end
+			end
+			table.insert(tKept, kOrder);
+			if tLatest[kOrder.Enemy] == nil or kOrder.Turn > tLatest[kOrder.Enemy] then
+				tLatest[kOrder.Enemy] = kOrder.Turn;
+			end
+		end
+	end
+	WriteDirectorOrders(pPlayer, tKept);
+	return tKept, tLatest;
+end
+
+-- On the turn after an order: how many of the units it sent still have no
+-- unit command, how many have one, and how many are gone (print-only; a unit
+-- command is not proof of which operation holds the unit).
+local function ReportDirectorArmies(pPlayer, tOrders, iTurn)
+	local tUnits = nil;
+	for _, kOrder in ipairs(tOrders) do
+		if kOrder.Turn == iTurn - 1 and not kOrder.Ended then
+			if tUnits == nil then
+				tUnits = {};
+				for _, pUnit in pPlayer:GetUnits():Members() do tUnits[pUnit:GetID()] = pUnit; end
+			end
+			local iIdle, iBusy, iGone = 0, 0, 0;
+			local tCommands = {};
+			for _, iUnit in ipairs(kOrder.Units) do
+				local pUnit = tUnits[iUnit];
+				if pUnit == nil then
+					iGone = iGone + 1;
+				elseif IsUnitUncommitted(pUnit) then
+					iIdle = iIdle + 1;
+				else
+					iBusy = iBusy + 1;
+					local sCommand = GetUnitOperationName(pUnit);
+					tCommands[sCommand] = (tCommands[sCommand] or 0) + 1;
+				end
+			end
+			local tParts = {};
+			for sCommand, iCount in pairs(tCommands) do table.insert(tParts, sCommand .. " x" .. iCount); end
+			table.sort(tParts);
+			print("Rose AI: War director army of player " .. pPlayer:GetID() .. " ordered turn " .. kOrder.Turn
+				.. " against player " .. kOrder.Enemy .. " plot (" .. kOrder.X .. "," .. kOrder.Y .. ") on turn " .. iTurn
+				.. ": " .. iIdle .. " of " .. #kOrder.Units .. " units with no unit command, "
+				.. iBusy .. " with one, " .. iGone .. " gone (merged into a corps or army counts as gone)"
+				.. (#tParts > 0 and (": " .. table.concat(tParts, ", ")) or ""));
+		end
+	end
+end
+
+-- The best bombard strength among units we own (aircraft included) and land
+-- units we could train now (unlocking tech owned; strategic resources are not
+-- checked).
+local function GetBestBombard(pPlayer)
+	local iBest = 0;
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		local kUnit = GetUnitInfo(pUnit);
+		if kUnit ~= nil and (kUnit.Bombard or 0) > iBest then iBest = kUnit.Bombard; end
+	end
+	local pTechs = pPlayer.GetTechs ~= nil and pPlayer:GetTechs() or nil;
+	for _, kUnit in ipairs(tBombardUnits) do
+		if kUnit.Bombard > iBest then
+			local kTech = (kUnit.Tech ~= nil and GameInfo.Technologies ~= nil) and GameInfo.Technologies[kUnit.Tech] or nil;
+			if kUnit.Tech == nil or (kTech ~= nil and pTechs ~= nil and pTechs:HasTech(kTech.Index)) then
+				iBest = kUnit.Bombard;
+			end
+		end
+	end
+	return iBest;
+end
+
+-- The city centre district: by plot first, then by type.
+local function GetCityCentre(pCity)
+	local pDistricts = pCity:GetDistricts();
+	local bOk, pDistrict = pcall(function() return pDistricts:GetDistrictAtLocation(pCity:GetX(), pCity:GetY()); end);
+	if bOk and pDistrict ~= nil then return pDistrict; end
+	return pDistricts:GetDistrict(iCityCenterDistrict);
+end
+
+-- The city centre's defense strength, or nil when it cannot be read.
+local function ReadCityDefense(pCity)
+	local bOk, iDefense = pcall(function() return GetCityCentre(pCity):GetDefenseStrength(); end);
+	if bOk and type(iDefense) == "number" then return iDefense; end
+	if not bDefenseReadWarned then
+		bDefenseReadWarned = true;
+		print("Rose AI: War director cannot read city defense (" .. tostring(iDefense)
+			.. "); the defense rule is skipped");
+	end
+	return nil;
+end
+
+-- True when the city has walls (outer defense hit points), or when that
+-- cannot be read.
+local function CityHasWalls(pCity)
+	local bOk, iWalls = pcall(function()
+		return GetCityCentre(pCity):GetMaxDamage(DefenseTypes.DISTRICT_OUTER);
+	end);
+	if bOk and type(iWalls) == "number" then return iWalls > 0; end
+	return true;
+end
+
+-- True when the city has Renaissance Walls or a replacement, or when that
+-- cannot be read.
+local function HasLateWalls(pCity)
+	local bOk, bLate = pcall(function()
+		local pBuildings = pCity:GetBuildings();
+		for _, iBuilding in ipairs(tLateWalls) do
+			if pBuildings:HasBuilding(iBuilding) then return true; end
+		end
+		return false;
+	end);
+	return not bOk or bLate == true;
+end
+
+-- Siege units an order on this city needs (two when it has walls or a
+-- defense of DIRECTOR_STRONG_DEFENSE or more, none otherwise: the brief's one
+-- for weak cities would have refused Sodo, taken with none in 20261018; round 9
+-- decision, 2026-10-18), whether it has walls, and whether a Battering Ram or Siege
+-- Tower counts against them (only Ancient or Medieval walls).
+local function SiegeNeeds(pCity, iDefense)
+	local bWalls = CityHasWalls(pCity);
+	local iNeed = (bWalls or (iDefense ~= nil and iDefense >= DIRECTOR_STRONG_DEFENSE)) and 2 or 0;
+	return iNeed, bWalls, bWalls and not HasLateWalls(pCity);
+end
+
+-- The army for one city, from our healthy units not sent with a live order of
+-- ours. Siege units first, at most DIRECTOR_MAX_STRIKE: land bombard units
+-- within DIRECTOR_GATHER_RADIUS tiles of the rally city (plus Battering Rams
+-- and Siege Towers there when bBreakers), nearest the target first, then
+-- bombers whose range reaches the target; then the other land units there,
+-- nearest the target first, up to DIRECTOR_MAX_UNITS. Land units on one of
+-- our city centres (the garrisons) stay; aircraft are based there. While we
+-- hold a nuclear device, WMD-capable aircraft (every bomber) are left to the
+-- nuclear launcher, which runs first in the same hook and cannot see our
+-- orders. Returns the army, its siege units and its land units.
+local function GatherSiegeArmy(pPlayer, pRally, pTarget, tOwnCentres, tReserved, bBreakers)
+	local tLandSiege, tAir, tOther = {}, {}, {};
+	local bDevices = nil;
+	local iTX, iTY = pTarget:GetX(), pTarget:GetY();
+	for _, pUnit in pPlayer:GetUnits():Members() do
+		local iType = pUnit:GetType();
+		local kArmy, kAir = tArmyUnits[iType], tAirSiegeUnits[iType];
+		if (kArmy ~= nil or kAir ~= nil) and not tReserved[pUnit:GetID()]
+			and (pUnit:GetDamage() or 0) < DIRECTOR_MAX_DAMAGE then
+			local iX, iY = pUnit:GetX(), pUnit:GetY();
+			local kEntry = { Unit = pUnit, ID = pUnit:GetID(), Distance = Map.GetPlotDistance(iX, iY, iTX, iTY) };
+			if kArmy ~= nil then
+				if not tOwnCentres[iX .. "," .. iY] and (bBreakers or not kArmy.Breaker)
+					and Map.GetPlotDistance(iX, iY, pRally:GetX(), pRally:GetY()) <= DIRECTOR_GATHER_RADIUS then
+					table.insert((kArmy.Siege or kArmy.Breaker) and tLandSiege or tOther, kEntry);
+				end
+			elseif kEntry.Distance <= kAir.Range then
+				if bDevices == nil then bDevices = GetHeldDevices(pPlayer) > 0; end
+				if not (kAir.WMD and bDevices) then table.insert(tAir, kEntry); end
+			end
+		end
+	end
+	local function Nearer(a, b)
+		if a.Distance ~= b.Distance then return a.Distance < b.Distance; end
+		return a.ID < b.ID;
+	end
+	table.sort(tLandSiege, Nearer);
+	table.sort(tAir, Nearer);
+	table.sort(tOther, Nearer);
+	local tArmy, iLand = {}, 0;
+	for _, kEntry in ipairs(tLandSiege) do
+		if #tArmy >= DIRECTOR_MAX_STRIKE then break; end
+		table.insert(tArmy, kEntry.Unit);
+		iLand = iLand + 1;
+	end
+	for _, kEntry in ipairs(tAir) do
+		if #tArmy >= DIRECTOR_MAX_STRIKE then break; end
+		table.insert(tArmy, kEntry.Unit);
+	end
+	local iStrike = #tArmy;
+	for _, kEntry in ipairs(tOther) do
+		if #tArmy >= DIRECTOR_MAX_UNITS then break; end
+		table.insert(tArmy, kEntry.Unit);
+		iLand = iLand + 1;
+	end
+	return tArmy, iStrike, iLand;
+end
+
+-- The rally: the sent land unit nearest the target that stands on land at
+-- least DIRECTOR_RALLY_MIN_DISTANCE tiles from it (the assembly Move holds the
+-- team within 2 tiles of the rally, so not inside the city's strike range),
+-- else the nearest sent land unit (ties: lower unit id), so the team
+-- assembles where the army stands. Returns the unit and its distance.
+local function ChooseRally(tArmy, pCity)
+	local function Better(pUnit, iD, pBest, iBest)
+		return iBest == nil or iD < iBest or (iD == iBest and pUnit:GetID() < pBest:GetID());
+	end
+	local pRallyUnit, iRallyDistance = nil, nil;
+	local pAnyUnit, iAnyDistance = nil, nil;
+	for _, pUnit in ipairs(tArmy) do
+		if tArmyUnits[pUnit:GetType()] ~= nil then
+			local iD = Map.GetPlotDistance(pUnit:GetX(), pUnit:GetY(), pCity:GetX(), pCity:GetY());
+			if Better(pUnit, iD, pAnyUnit, iAnyDistance) then pAnyUnit, iAnyDistance = pUnit, iD; end
+			local pPlot = Map.GetPlot(pUnit:GetX(), pUnit:GetY());
+			local bWater = pPlot ~= nil and pPlot.IsWater ~= nil and pPlot:IsWater();
+			if iD >= DIRECTOR_RALLY_MIN_DISTANCE and not bWater and Better(pUnit, iD, pRallyUnit, iRallyDistance) then
+				pRallyUnit, iRallyDistance = pUnit, iD;
+			end
+		end
+	end
+	if pRallyUnit == nil then return pAnyUnit, iAnyDistance; end
+	return pRallyUnit, iRallyDistance;
+end
+
+-- Whether the army can walk to the city: the shortest path from the rally
+-- unit to a land plot next to the city (UnitManager.GetMoveToPath, gameplay
+-- UnitManager table per the XP2 DLL, Pirates scenario precedent; it returns
+-- the path's plots, an empty table when there is none; a path into the enemy
+-- city plot itself depends on the unit's attacks left, so it is not asked)
+-- must be at most DIRECTOR_PATH_FACTOR times the distance (+1 in case the
+-- start plot is listed). Without a path query, the rally unit must stand on
+-- the city's landmass. Returns true or false, the reason, and the path
+-- length (nil when the landmass was used).
+local bPathReadWarned = false;
+local function CheckLandRoute(pUnit, pCity, iDistance)
+	local iX, iY = pCity:GetX(), pCity:GetY();
+	local iUX, iUY = pUnit:GetX(), pUnit:GetY();
+	-- A rally unit next to the city is already there.
+	if iDistance <= 1 then return true, nil, 1; end
+	local fnPath = UnitManager ~= nil and UnitManager.GetMoveToPath or nil;
+	if fnPath ~= nil then
+		local iBest, sError = nil, nil;
+		for iDirection = 0, iDirections - 1 do
+			local pPlot = Map.GetAdjacentPlot(iX, iY, iDirection);
+			if pPlot ~= nil and not pPlot:IsWater() then
+				local bOk, tPath = pcall(fnPath, pUnit, pPlot:GetIndex());
+				if not bOk or type(tPath) ~= "table" then
+					sError = bOk and ("it returned " .. type(tPath)) or tostring(tPath);
+					break;
+				end
+				if #tPath > 0 and (iBest == nil or #tPath < iBest) then iBest = #tPath; end
+			end
+		end
+		if sError == nil then
+			if iBest == nil then
+				return false, "no land path from the army at (" .. iUX .. "," .. iUY .. ")", nil;
+			end
+			if iBest > DIRECTOR_PATH_FACTOR * iDistance + 1 then
+				return false, "the land path from the army at (" .. iUX .. "," .. iUY .. ") is " .. iBest
+					.. " plots for a distance of " .. iDistance .. " (at most " .. DIRECTOR_PATH_FACTOR .. "x)", iBest;
+			end
+			return true, nil, iBest;
+		end
+		if not bPathReadWarned then
+			bPathReadWarned = true;
+			print("Rose AI: War director cannot read land paths (" .. sError .. "); the landmass test is used");
+		end
+	end
+	local bOk, bSame = pcall(function()
+		return Map.GetPlot(iUX, iUY):GetAreaID() == Map.GetPlot(iX, iY):GetAreaID();
+	end);
+	if bOk and bSame == false then
+		return false, "the army at (" .. iUX .. "," .. iUY .. ") is on another landmass", nil;
+	end
+	return true, nil, nil;
+end
+
+-- An enemy major with DIRECTOR_THREAT_UNITS or more visible land combat units
+-- on our land (plots we own; units in their own territory do not count,
+-- 2026-10-18; the tiles of a city just taken are ours, so units on them
+-- count) within DIRECTOR_THREAT_RADIUS tiles of one of our
+-- cities: the enemy, the city and the count (lowest enemy id first, then our
+-- cities in order), or nil.
+local function FindThreat(pPlayer, tSince)
+	local iPlayerID = pPlayer:GetID();
+	local pVisibility = PlayersVisibility ~= nil and PlayersVisibility[iPlayerID] or nil;
+	local tCities = {};
+	for _, pCity in pPlayer:GetCities():Members() do table.insert(tCities, pCity); end
+	local tEnemyIDs = {};
+	for iOtherID in pairs(tSince) do table.insert(tEnemyIDs, iOtherID); end
+	table.sort(tEnemyIDs);
+	for _, iOtherID in ipairs(tEnemyIDs) do
+		local pOther = Players[iOtherID];
+		if pOther ~= nil and pOther:IsAlive() and pOther:IsMajor() then
+			local tCount = {};
+			for _, pUnit in pOther:GetUnits():Members() do
+				local iX, iY = pUnit:GetX(), pUnit:GetY();
+				local pPlot = Map.GetPlot(iX, iY);
+				if tLandCombatUnits[pUnit:GetType()] and pPlot ~= nil and pPlot:GetOwner() == iPlayerID
+					and (pVisibility == nil or pVisibility:IsVisible(iX, iY)) then
+					for i, pCity in ipairs(tCities) do
+						if Map.GetPlotDistance(iX, iY, pCity:GetX(), pCity:GetY()) <= DIRECTOR_THREAT_RADIUS then
+							tCount[i] = (tCount[i] or 0) + 1;
+						end
+					end
+				end
+			end
+			for i, pCity in ipairs(tCities) do
+				if (tCount[i] or 0) >= DIRECTOR_THREAT_UNITS then return iOtherID, pCity, tCount[i]; end
+			end
+		end
+	end
+	return nil;
+end
+
+-- Candidate cities in order, { City, Owner, Distance, Rally, Population,
+-- Defense, Bombard }, or nil and a reason.
+local function FindDirectorTargets(pPlayer, tSince, iTurn, tOrders, tLatest, bAdvantage)
+	local iPlayerID = pPlayer:GetID();
+	local tOwnCities = {};
+	for _, pCity in pPlayer:GetCities():Members() do
+		table.insert(tOwnCities, pCity);
+	end
+	if #tOwnCities == 0 then return nil, "no city of our own"; end
+	local pVisibility = PlayersVisibility ~= nil and PlayersVisibility[iPlayerID] or nil;
+	if pVisibility == nil then return nil, "no visibility data"; end
+	local iReach = bAdvantage and DIRECTOR_REACH_ADVANTAGE or DIRECTOR_REACH;
+	local iBombard = nil;
+
+	-- Locked cities: those of live orders, and for DIRECTOR_FAILED_CITY_LOCK
+	-- turns after its end, the city of an ended order.
+	local tOrdered = {};
+	for _, kOrder in ipairs(tOrders) do
+		if not kOrder.Ended or iTurn - kOrder.EndTurn < DIRECTOR_FAILED_CITY_LOCK then
+			tOrdered[kOrder.X .. "," .. kOrder.Y] = true;
+		end
+	end
+	local tWarIDs = {};
+	for iOtherID, iSince in pairs(tSince) do
+		if iTurn - iSince >= DIRECTOR_MIN_WAR_TURNS then table.insert(tWarIDs, iOtherID); end
+	end
+	table.sort(tWarIDs);
+	local tEnemyIDs = {};
+	local iNextFree = nil;
+	for _, iOtherID in ipairs(tWarIDs) do
+		local iLatest = tLatest[iOtherID];
+		if not bAdvantage and iLatest ~= nil and iTurn - iLatest < DIRECTOR_ENEMY_COOLDOWN then
+			local iFree = iLatest + DIRECTOR_ENEMY_COOLDOWN;
+			if iNextFree == nil or iFree < iNextFree then iNextFree = iFree; end
+		else
+			table.insert(tEnemyIDs, iOtherID);
+		end
+	end
+	if #tEnemyIDs == 0 then
+		if iNextFree ~= nil then
+			return nil, "a siege was ordered against every enemy within " .. DIRECTOR_ENEMY_COOLDOWN
+				.. " turns (next turn " .. iNextFree .. ")";
+		end
+		return nil, "no war with a major of " .. DIRECTOR_MIN_WAR_TURNS .. "+ turns";
+	end
+
+	local tCandidates = {};
+	local iInReach, iTooStrong, iBusy = 0, 0, 0;
+	local iWeakest = nil;
+	for _, iOwner in ipairs(tEnemyIDs) do
+		local pOwner = Players[iOwner];
+		if pOwner ~= nil and pOwner:IsAlive() and pOwner:IsMajor() then
+			for _, pCity in pOwner:GetCities():Members() do
+				local iX, iY = pCity:GetX(), pCity:GetY();
+				if pVisibility:IsRevealed(iX, iY) then
+					local pRally, iDistance = nil, nil;
+					for _, pOwn in ipairs(tOwnCities) do
+						local iD = Map.GetPlotDistance(pOwn:GetX(), pOwn:GetY(), iX, iY);
+						if iDistance == nil or iD < iDistance then pRally, iDistance = pOwn, iD; end
+					end
+					if iDistance <= iReach then
+						iInReach = iInReach + 1;
+						if tOrdered[iX .. "," .. iY] then
+							iBusy = iBusy + 1;
+						else
+							local iDefense = ReadCityDefense(pCity);
+							if iBombard == nil then iBombard = GetBestBombard(pPlayer); end
+							if iDefense ~= nil and iDefense > iBombard + DIRECTOR_DEFENSE_MARGIN then
+								iTooStrong = iTooStrong + 1;
+								if iWeakest == nil or iDefense < iWeakest then iWeakest = iDefense; end
+							else
+								table.insert(tCandidates, { City = pCity, Owner = iOwner, Distance = iDistance,
+									Rally = pRally, Population = pCity:GetPopulation(), Defense = iDefense,
+									Bombard = iBombard, Order = #tCandidates });
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	if #tCandidates == 0 then
+		if iInReach == 0 then
+			return nil, "no revealed enemy city within " .. iReach .. " tiles of our cities";
+		end
+		if iTooStrong > 0 then
+			return nil, iTooStrong .. " enemy cities within reach have defense above our best bombard "
+				.. tostring(iBombard) .. " + " .. DIRECTOR_DEFENSE_MARGIN .. " (weakest " .. iWeakest .. ")"
+				.. (iBusy > 0 and ", and our sieges hold the others or failed there within " .. DIRECTOR_FAILED_CITY_LOCK .. " turns" or "");
+		end
+		return nil, "every city within reach is under a siege we ordered or held one off within "
+			.. DIRECTOR_FAILED_CITY_LOCK .. " turns";
+	end
+	table.sort(tCandidates, function(a, b)
+		if a.Distance ~= b.Distance then return a.Distance < b.Distance; end
+		if a.Population ~= b.Population then return a.Population > b.Population; end
+		return a.Order < b.Order;
+	end);
+	return tCandidates, nil;
+end
+
+function TryWarDirector(iPlayerID)
+	if not WAR_DIRECTOR_ENABLED then return; end
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+	local tSince = UpdateNuclearWarSince(pPlayer, iTurn);
+	local tOrders, tLatest = PruneDirectorOrders(pPlayer, iTurn, tSince);
+	ReportDirectorArmies(pPlayer, tOrders, iTurn);
+	if next(tSince) == nil then
+		ReportDirectorReason(iPlayerID, nil);
+		return;
+	end
+	if IsLatched(iPlayerID, RECOVERY_LATCH) then
+		ReportDirectorReason(iPlayerID, "Military Recovery is latched");
+		return;
+	end
+	local iNextAttempt = pPlayer:GetProperty(DIRECTOR_NEXT_ATTEMPT_PROPERTY);
+	if type(iNextAttempt) == "number" and iTurn < iNextAttempt then
+		ReportDirectorReason(iPlayerID, "retry after a refused start at turn " .. iNextAttempt);
+		return;
+	end
+	-- Defend first: City Defense (Priority 4, like the director's siege) takes
+	-- a recruiting siege's units when our own cities are threatened.
+	local iThreat, pThreatened, iThreatUnits = FindThreat(pPlayer, tSince);
+	if iThreat ~= nil then
+		ReportDirectorReason(iPlayerID, "player " .. iThreat .. " has " .. iThreatUnits .. " land combat units on our land within "
+			.. DIRECTOR_THREAT_RADIUS .. " tiles of our city " .. tostring(pThreatened:GetName()) .. " (defend first)");
+		return;
+	end
+	local bAdvantage = IsLatched(iPlayerID, ADVANTAGE_LATCH);
+	local tCandidates, sReason = FindDirectorTargets(pPlayer, tSince, iTurn, tOrders, tLatest, bAdvantage);
+	if tCandidates == nil then
+		ReportDirectorReason(iPlayerID, sReason);
+		return;
+	end
+
+	-- The first city, nearest first, whose army passes every rule.
+	local tOwnCentres = {};
+	for _, pCity in pPlayer:GetCities():Members() do
+		tOwnCentres[pCity:GetX() .. "," .. pCity:GetY()] = true;
+	end
+	local tReserved = {};
+	for _, kOrder in ipairs(tOrders) do
+		for _, iUnit in ipairs(kOrder.Units) do tReserved[iUnit] = true; end
+	end
+	local kTarget, tArmy, iStrike, iNeed, iLand, bWalls = nil, nil, 0, 0, 0, false;
+	local pRallyUnit, iRallyDistance, iPath = nil, nil, nil;
+	local tRefused = { army = 0, siege = 0, far = 0, route = 0 };
+	local sFirstRefusal = nil;
+	for _, kCandidate in ipairs(tCandidates) do
+		local pCandidate = kCandidate.City;
+		local iCandidateNeed, bCandidateWalls, bBreakers = SiegeNeeds(pCandidate, kCandidate.Defense);
+		local tUnits, iUnitsStrike, iUnitsLand = GatherSiegeArmy(pPlayer, kCandidate.Rally, pCandidate, tOwnCentres, tReserved, bBreakers);
+		local sRule, sWhy = nil, nil;
+		local pUnit, iDistance, iPathLength = nil, nil, nil;
+		if iUnitsLand < DIRECTOR_MIN_UNITS then
+			sRule, sWhy = "army", "an army of " .. iUnitsLand .. " land units near our city "
+				.. tostring(kCandidate.Rally:GetName()) .. " (needs " .. DIRECTOR_MIN_UNITS .. ")";
+		elseif iUnitsStrike < iCandidateNeed then
+			sRule, sWhy = "siege", iUnitsStrike .. " siege units in its army (needs " .. iCandidateNeed
+				.. ": walls " .. (bCandidateWalls and "yes" or "no") .. " defense " .. tostring(kCandidate.Defense) .. ")";
+		else
+			pUnit, iDistance = ChooseRally(tUnits, pCandidate);
+			if iDistance > DIRECTOR_MAX_ARMY_DISTANCE then
+				sRule, sWhy = "far", "the army is " .. iDistance .. " tiles from it (needs " .. DIRECTOR_MAX_ARMY_DISTANCE .. ")";
+			else
+				local bRoute, sRoute;
+				bRoute, sRoute, iPathLength = CheckLandRoute(pUnit, pCandidate, iDistance);
+				if not bRoute then sRule, sWhy = "route", sRoute; end
+			end
+		end
+		if sRule == nil then
+			kTarget, tArmy, iStrike, iNeed, iLand, bWalls = kCandidate, tUnits, iUnitsStrike, iCandidateNeed, iUnitsLand, bCandidateWalls;
+			pRallyUnit, iRallyDistance, iPath = pUnit, iDistance, iPathLength;
+			break;
+		end
+		tRefused[sRule] = tRefused[sRule] + 1;
+		if sFirstRefusal == nil then
+			sFirstRefusal = "nearest " .. tostring(pCandidate:GetName()) .. " (" .. pCandidate:GetX() .. ","
+				.. pCandidate:GetY() .. "): " .. sWhy;
+		end
+	end
+	if kTarget == nil then
+		ReportDirectorReason(iPlayerID, #tCandidates .. " enemy cities within reach, none ordered (army under "
+			.. DIRECTOR_MIN_UNITS .. " units " .. tRefused.army .. ", too few siege units " .. tRefused.siege
+			.. ", army over " .. DIRECTOR_MAX_ARMY_DISTANCE .. " tiles away " .. tRefused.far
+			.. ", no land route " .. tRefused.route .. "); " .. sFirstRefusal);
+		return;
+	end
+	ReportDirectorReason(iPlayerID, nil);
+
+	local pCity = kTarget.City;
+	local pMilitaryAI = pPlayer:GetAi_Military();
+	local pTargetPlot = Map.GetPlot(pCity:GetX(), pCity:GetY());
+	local pRallyPlot = Map.GetPlot(pRallyUnit:GetX(), pRallyUnit:GetY());
+	if pMilitaryAI == nil or pTargetPlot == nil or pRallyPlot == nil then return; end
+	local iOperationID = pMilitaryAI:StartScriptedOperationWithTargetAndRally(
+		DIRECTOR_OPERATION_NAME, kTarget.Owner, pTargetPlot:GetIndex(), pRallyPlot:GetIndex());
+	-- The DLL returns the operation id, or -1 (no slot or no operation) or 0
+	-- (an early refusal).
+	if type(iOperationID) ~= "number" or iOperationID <= 0 then
+		pPlayer:SetProperty(DIRECTOR_NEXT_ATTEMPT_PROPERTY, iTurn + DIRECTOR_RETRY_TURNS);
+		print("Rose AI: War director start rejected for player " .. iPlayerID
+			.. " turn " .. iTurn .. " against player " .. kTarget.Owner
+			.. " plot (" .. pCity:GetX() .. "," .. pCity:GetY() .. ")"
+			.. " result " .. tostring(iOperationID));
+		return;
+	end
+	-- AddUnitToScriptedOperation returns nothing (Nubia does not check it).
+	local tUnitIDs = {};
+	for _, pUnit in ipairs(tArmy) do
+		pMilitaryAI:AddUnitToScriptedOperation(iOperationID, pUnit:GetID());
+		table.insert(tUnitIDs, pUnit:GetID());
+	end
+	table.insert(tOrders, { Enemy = kTarget.Owner, Turn = iTurn, X = pCity:GetX(), Y = pCity:GetY(),
+		Units = tUnitIDs });
+	WriteDirectorOrders(pPlayer, tOrders);
+	print("Rose AI: War director ordered for player " .. iPlayerID
+		.. " turn " .. iTurn
+		.. " against player " .. kTarget.Owner
+		.. " city " .. tostring(pCity:GetName())
+		.. " plot (" .. pCity:GetX() .. "," .. pCity:GetY() .. ")"
+		.. " distance " .. kTarget.Distance
+		.. " from our city " .. tostring(kTarget.Rally:GetName())
+		.. " population " .. kTarget.Population
+		.. " walls " .. (bWalls and "yes" or "no")
+		.. " defense " .. tostring(kTarget.Defense)
+		.. " bombard " .. tostring(kTarget.Bombard)
+		.. " advantage " .. (bAdvantage and "yes" or "no")
+		.. " units " .. #tArmy .. " siege " .. iStrike .. " needs " .. iNeed .. " land " .. iLand
+		.. " rally (" .. pRallyUnit:GetX() .. "," .. pRallyUnit:GetY() .. ") distance " .. iRallyDistance
+		.. " path " .. tostring(iPath or "landmass")
+		.. " operation " .. iOperationID
+		.. " unit ids " .. table.concat(tUnitIDs, ","));
+end
+
+-- Taking a city we ordered a siege on drops that order, so the next siege
+-- against its old owner can be ordered at the next turn start (city after
+-- city); other captures change nothing. Gameplay event: (capturer, previous
+-- owner, city id, x, y), as in Firaxis' Nubia and Alexander scenarios.
+local function OnDirectorCityConquered(iCapturerID, iOwnerID, iCityID, iX, iY)
+	if not WAR_DIRECTOR_ENABLED then return; end
+	local pPlayer = Players[iCapturerID];
+	if not IsEligibleAIPlayer(pPlayer) or iOwnerID == nil or iOwnerID == iCapturerID then return; end
+	local tOrders = ReadDirectorOrders(pPlayer);
+	local tKept = {};
+	for _, kOrder in ipairs(tOrders) do
+		if not (kOrder.Enemy == iOwnerID and kOrder.X == iX and kOrder.Y == iY) then table.insert(tKept, kOrder); end
+	end
+	if #tKept == #tOrders then return; end
+	WriteDirectorOrders(pPlayer, tKept);
+	print("Rose AI: War director player " .. iCapturerID .. " took the city at ("
+		.. tostring(iX) .. "," .. tostring(iY) .. ") from player " .. iOwnerID
+		.. " turn " .. Game.GetCurrentGameTurn() .. "; the next siege against them may be ordered");
+end
+if GameEvents.CityConquered ~= nil then
+	GameEvents.CityConquered.Add(function(iCapturerID, iOwnerID, iCityID, iX, iY)
+		local bOk, sError = pcall(OnDirectorCityConquered, iCapturerID, iOwnerID, iCityID, iX, iY);
+		if not bOk then
+			print("Rose AI ERROR: War director capture handler failed player "
+				.. tostring(iCapturerID) .. ": " .. tostring(sError));
+		end
+	end);
+end
+
+end -- the war director block
+
+-- ============================================================================
+-- Operations against city-states (round 7, W27, 2026-10-15). Print-only.
+--
+-- In the 2026-10-15 game 15 planned sieges assembled against a city-state the
+-- attacker had 2 or more envoys in (Maori was suzerain of its target) and
+-- waited at the walls for a war the diplomacy AI never declared, about 13
+-- turns a cycle, then picked the same city again. For each eligible AI this
+-- prints a line when an operation against a city-state appears or when that
+-- city-state's envoys (ours), suzerain or war state change, and one when the
+-- operation is gone. HasOperationAgainst is the only operation read gameplay
+-- Lua has: it does not give the type or phase, so "at war no" marks the
+-- undeclared case. Since round 9 it asks the existence form (any live
+-- operation of ours against that city-state; until then the two-argument
+-- form, which only saw a team mustering on its rally plot). Count siege
+-- cycles from AI_Operation.csv. Envoys come from the InGame
+-- bridge ("?" when it cannot answer); a minor that takes no envoys (Free
+-- Cities) is skipped. Nothing is changed. The table is local and not saved,
+-- so the lines repeat after a reload. Diagnostic games only (ROSE_VERBOSE_LOGS).
+-- ============================================================================
+local tCityStateOperations = {};
+
+-- Envoys and suzerain; false for a minor that takes no envoys; nil when the
+-- bridge cannot answer.
+local function ReadEnvoys(iMinorID, iPlayerID)
+	local kBridge = ExposedMembers.RoseAI;
+	if kBridge == nil or kBridge.GetEnvoyInfo == nil then return nil; end
+	local bOk, iEnvoys, iSuzerain = pcall(kBridge.GetEnvoyInfo, iMinorID, iPlayerID);
+	if not bOk then return nil; end
+	return iEnvoys, iSuzerain;
+end
+
+local function DescribeCapital(pPlayer)
+	local pCity = pPlayer:GetCities():GetCapitalCity();
+	if pCity == nil then return "none"; end
+	return pCity:GetX() .. "," .. pCity:GetY();
+end
+
+local function UpdateCityStateOperations(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then
+		tCityStateOperations[iPlayerID] = nil;
+		return;
+	end
+	local iTurn = Game.GetCurrentGameTurn();
+	local tOld = tCityStateOperations[iPlayerID] or {};
+	local tNow = {};
+	local pDiplomacy = pPlayer:GetDiplomacy();
+	for _, pMinor in ipairs(PlayerManager.GetAliveMinors()) do
+		local iMinorID = pMinor:GetID();
+		if HasOperationAgainst(pPlayer, iMinorID) then
+			local iEnvoys, iSuzerain = ReadEnvoys(iMinorID, iPlayerID);
+			if iEnvoys ~= false then
+				local sState = "envoys " .. tostring(iEnvoys or "?")
+					.. " suzerain " .. tostring(iSuzerain or "?")
+					.. " at war " .. (pDiplomacy:IsAtWarWith(iMinorID) and "yes" or "no");
+				local kOld = tOld[iMinorID];
+				local kNow = { State = sState, Since = (kOld ~= nil) and kOld.Since or iTurn };
+				tNow[iMinorID] = kNow;
+				if kOld == nil or kOld.State ~= sState then
+					print("Rose AI: Operation against city-state for player " .. iPlayerID
+						.. " turn " .. iTurn
+						.. ": city-state " .. iMinorID
+						.. " capital " .. DescribeCapital(pMinor)
+						.. " " .. sState
+						.. " since turn " .. kNow.Since);
+				end
+			end
+		end
+	end
+	for iMinorID, kOld in pairs(tOld) do
+		if tNow[iMinorID] == nil then
+			print("Rose AI: Operation against city-state ended for player " .. iPlayerID
+				.. " turn " .. iTurn
+				.. ": city-state " .. iMinorID
+				.. " since turn " .. kOld.Since);
+		end
+	end
+	tCityStateOperations[iPlayerID] = tNow;
+end
+
+-- ============================================================================
+-- Operation read probe (round 8, 2026-10-17). Print-only.
+--
+-- The round 8 DLL trace read the binding as HasOperationAgainst(player,
+-- requireReady, maxDist, teamPlotSlot): the two-argument call Rose uses
+-- elsewhere tests whether a unit of an operation's team stands on its rally
+-- plot, and slot -1 makes it an existence test (any live operation of ours
+-- against that player, scripted ones included; confirmed in 20261018, 7 of 7
+-- conclusive director orders, and used by the director, the nuclear
+-- preference and the city-state report since round 9). For the record of every
+-- game, this asks, for each eligible AI and every other alive major
+-- and city-state, the existence form (false, 0, -1) and the ready form (true,
+-- 0, -1), and prints a line when either answer changes, with the two-argument
+-- answer, the war state and our recorded director orders against that player.
+-- The answer cannot count operations: an order is conclusive only when the
+-- probe read "exists no" before it, since a planned siege that outlived its
+-- declaration, a Military Victory slot, a reactive assault, a nuclear or naval
+-- operation, or an earlier director order against the same player already
+-- reads yes; check AI_Operation.csv. A failed read keeps the last state (the error prints
+-- once). Nothing is changed; the table is local, so the lines repeat after a
+-- reload. Diagnostic games only (ROSE_VERBOSE_LOGS).
+-- ============================================================================
+local tOperationProbe = {};
+local bOperationProbeWarned = false;
+
+-- "yes", "no", "?" when the call fails, otherwise the value returned. A nil
+-- slot makes the two-argument call.
+local function ReadOperationProbe(pMilitaryAI, iOtherID, bReady, iSlot)
+	local bOk, value = pcall(function()
+		if iSlot == nil then return pMilitaryAI:HasOperationAgainst(iOtherID, bReady); end
+		return pMilitaryAI:HasOperationAgainst(iOtherID, bReady, 0, iSlot);
+	end);
+	if not bOk then
+		if not bOperationProbeWarned then
+			bOperationProbeWarned = true;
+			print("Rose AI ERROR: Operation probe read failed: " .. tostring(value));
+		end
+		return "?";
+	end
+	if value == true then return "yes"; end
+	if value == false then return "no"; end
+	return tostring(value);
+end
+
+local function UpdateOperationProbe(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then
+		tOperationProbe[iPlayerID] = nil;
+		return;
+	end
+	local pMilitaryAI = pPlayer:GetAi_Military();
+	if pMilitaryAI == nil then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+	local pDiplomacy = pPlayer:GetDiplomacy();
+	local tOrderTurns = {};
+	for _, kOrder in ipairs(ReadDirectorOrders(pPlayer)) do
+		tOrderTurns[kOrder.Enemy] = tOrderTurns[kOrder.Enemy] or {};
+		table.insert(tOrderTurns[kOrder.Enemy], kOrder.Turn);
+	end
+	local tOthers = {};
+	for _, pOther in ipairs(PlayerManager.GetAliveMajors()) do
+		if pOther:GetID() ~= iPlayerID then table.insert(tOthers, { ID = pOther:GetID(), Kind = "major" }); end
+	end
+	for _, pOther in ipairs(PlayerManager.GetAliveMinors()) do
+		table.insert(tOthers, { ID = pOther:GetID(), Kind = "city-state" });
+	end
+	local tOld = tOperationProbe[iPlayerID] or {};
+	local tNow = {};
+	for _, kOther in ipairs(tOthers) do
+		local iOtherID = kOther.ID;
+		local sOld = tOld[iOtherID] or "exists no ready no";
+		local sExists = ReadOperationProbe(pMilitaryAI, iOtherID, false, -1);
+		local sReady = ReadOperationProbe(pMilitaryAI, iOtherID, true, -1);
+		if sExists == "?" or sReady == "?" then
+			tNow[iOtherID] = tOld[iOtherID];
+		else
+			local sState = "exists " .. sExists .. " ready " .. sReady;
+			tNow[iOtherID] = sState;
+			if sState ~= sOld then
+				local tTurns = tOrderTurns[iOtherID];
+				if tTurns ~= nil then table.sort(tTurns); end
+				print("Rose AI: Operation probe for player " .. iPlayerID
+					.. " turn " .. iTurn
+					.. " against " .. kOther.Kind .. " " .. iOtherID
+					.. ": " .. sState .. " (was " .. sOld .. ")"
+					.. " rally " .. ReadOperationProbe(pMilitaryAI, iOtherID, false, nil)
+					.. " at war " .. (pDiplomacy:IsAtWarWith(iOtherID) and "yes" or "no")
+					.. " director orders " .. (tTurns ~= nil and ("turn " .. table.concat(tTurns, ",")) or "none"));
+			end
+		end
+	end
+	tOperationProbe[iPlayerID] = tNow;
+end
+
 -- ============================================================================
 -- Stuck Trader diagnostic (HANDOFF W14 item 2). Print-only.
 --
@@ -1937,6 +2960,23 @@ function OnPlayerTurnStartComplete(iPlayerID)
 	if not bOk then
 		print("Rose AI ERROR: Nuclear strike failed player "
 			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
+	bOk, sError = pcall(TryWarDirector, iPlayerID);
+	if not bOk then
+		print("Rose AI ERROR: War director failed player "
+			.. tostring(iPlayerID) .. ": " .. tostring(sError));
+	end
+	if ROSE_VERBOSE_LOGS then
+		bOk, sError = pcall(UpdateCityStateOperations, iPlayerID);
+		if not bOk then
+			print("Rose AI ERROR: City-state operation report failed player "
+				.. tostring(iPlayerID) .. ": " .. tostring(sError));
+		end
+		bOk, sError = pcall(UpdateOperationProbe, iPlayerID);
+		if not bOk then
+			print("Rose AI ERROR: Operation probe failed player "
+				.. tostring(iPlayerID) .. ": " .. tostring(sError));
+		end
 	end
 	TryStartNavalSuperiority(iPlayerID);
 end

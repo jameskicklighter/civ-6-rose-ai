@@ -21,7 +21,9 @@ Applied here:
 - Lower city-assault strength ratios so assembled armies can proceed.
 - Siege-unit (or, late, bomber) requirement for walled-city attacks.
 - Settlement escort limits that reserve siege units for military operations.
-- Small data tuning for Simple Operation Attack and Early City Assault.
+- Replacement Simple Operation Attack tree (barbarian camps): about 10-turn
+  limit on the approach and 12 on the attack; camps within 12 tiles.
+- Small data tuning for Early City Assault.
 - Nuclear Assault: base contract-link fix, no strength requirement,
   priority 4 (the highest the AI ticks), and one stolen delivery unit.
 - New Rose Nuclear Strike operation: one Lua-added delivery unit, no Recruit
@@ -231,6 +233,22 @@ Not applied here:
       <Where OperationName="Wartime Attack Enemy City" />
       <Set OperationType="ROSE_WARTIME_ASSAULT" />
     </Update>
+    <!--
+    Round 7 step 3 (HANDOFF W10, 2026-10-15): the engine no longer starts its
+    own wartime assaults; the wartime slot belongs to the war director's Rose
+    Wartime Siege (below). The definitions stay (the DLL's reactive
+    CITY_ASSAULT starts pick only planned definitions). City-states also used
+    these; they keep their planned slot, whose definitions also take targets
+    they are at war with. Setting SelfStart back to true restores step 2.
+    -->
+    <Update>
+      <Where OperationName="Wartime Attack Walled City" />
+      <Set SelfStart="false" />
+    </Update>
+    <Update>
+      <Where OperationName="Wartime Attack Enemy City" />
+      <Set SelfStart="false" />
+    </Update>
 
     <!--
     City Defense had no OperationType, so nothing capped how many ran at once
@@ -262,16 +280,125 @@ Not applied here:
       <Where OperationName="Nuclear Assault" />
       <Set Priority="4" />
     </Update>
+
+    <!--
+    Barbarian camps within 12 tiles (base 25 in the area, region unlimited), so
+    an AI clears the camps near its cities instead of sending its one camp
+    operation across the continent (round 7, W32 (b)). Region is set equal to
+    area, as for the walled-city reach, because how the engine uses the two is
+    untraced. The engine does not check that a path exists when it picks the
+    camp; in the 2026-10-15 game most long camp operations logged far more
+    no-path moves than real ones (Canada 102 to 10), but most were against
+    camps 1-7 tiles from the attacker's cities, so this cap changes little.
+    -->
+    <Update>
+      <Where OperationName="Attack Barb Camp" />
+      <Set MaxTargetDistInRegion="12" MaxTargetDistInArea="12" />
+    </Update>
   </AiOperationDefs>
 
   <!--
-  Existing tree tuning: Simple Operation Attack
+  Replacement: Simple Operation Attack (barbarian camps; round 7, W32 (a), 2026-10-15)
 
-  RH raises the recruit range on the early recruitment node. This makes the
-  operation less likely to stall because it can pull units from farther away.
+  The base tree has no time limit after assembly: its move phase (base
+  Concurrent 13: Change Target, Recruit, Attack Units, Operation Move) runs
+  until the team arrives, and its attack phase (base Concurrent 18: Recruit,
+  Attack Units, Operation Attack) until the camp is gone. In the 2026-10-15
+  game camp operations of 16-45 turns stalled in both: Canada 45 turns in the
+  attack phase with its units 9-12 tiles from the camp ("Move -9999", no
+  path, every turn), Babylon, Khmer, Maori and Indonesia 16-27 turns in the
+  move phase. ATTACK_BARBARIANS has one slot, so no other camp could be
+  attacked meanwhile. Rose copies the base tree and wraps each phase in a
+  failing Turn Limiter, as the Siege tree's limiters do: Node 13, Turns to
+  Run 20 (about 10 turns by the halving rule, see the Siege entry in
+  AGENTS.md) around the move phase, and Node 19, Turns to Run 24 (about 12)
+  around the attack phase. When one fails the operation ends and the slot
+  opens; the AI may pick the same camp again. Base nodes 0-12 keep their ids,
+  base 13-17 are Rose 14-18, base 18-21 are Rose 20-23, and every JumpTo of
+  22 is 24. TreeData is the base data at the shifted ids plus RH's recruit
+  range 14 on Node 8 (DefnId 2; base has no row). Barb Camp Tech Boost uses
+  the same tree. Checked by .scratch/w20-w21/verify_xml.py. Fresh games only.
   -->
+  <BehaviorTreeNodes>
+    <Delete TreeName="Simple Operation Attack" />
+
+    <Row NodeType="Concurrent" NodeId="0" TreeName="Simple Operation Attack" JumpTo="24" />
+      <Row NodeType="Operation Defend Units" NodeId="1" TreeName="Simple Operation Attack" />
+      <Row NodeType="Operation Attack Units" NodeId="2" TreeName="Simple Operation Attack" />
+      <Row NodeType="Operation Change Target" NodeId="3" TreeName="Simple Operation Attack" />
+      <Row NodeType="Sequence" NodeId="4" TreeName="Simple Operation Attack" JumpTo="24" />
+        <Row NodeType="Decode Trigger" NodeId="5" TreeName="Simple Operation Attack" />
+        <Row NodeType="Concurrent" NodeId="6" TreeName="Simple Operation Attack" JumpTo="13" />
+          <Row NodeType="Contract Manager Decorator" NodeId="7" TreeName="Simple Operation Attack" JumpTo="9" />
+            <Row NodeType="Recruit Units" NodeId="8" TreeName="Simple Operation Attack" />
+          <Row NodeType="Operation Attack Units" NodeId="9" TreeName="Simple Operation Attack" />
+          <Row NodeType="Priority" NodeId="10" TreeName="Simple Operation Attack" JumpTo="13" />
+            <Row NodeType="Operation Is Ready" NodeId="11" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Move" NodeId="12" TreeName="Simple Operation Attack" />
+        <Row NodeType="Turn Limiter" NodeId="13" TreeName="Simple Operation Attack" JumpTo="19" /> <!-- Rose: end a camp approach that has not arrived after about 10 turns. -->
+          <Row NodeType="Concurrent" NodeId="14" TreeName="Simple Operation Attack" JumpTo="19" />
+            <Row NodeType="Operation Change Target" NodeId="15" TreeName="Simple Operation Attack" />
+            <Row NodeType="Recruit Units" NodeId="16" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Attack Units" NodeId="17" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Move" NodeId="18" TreeName="Simple Operation Attack" />
+        <Row NodeType="Turn Limiter" NodeId="19" TreeName="Simple Operation Attack" JumpTo="24" /> <!-- Rose: end a camp attack that has not won after about 12 turns. -->
+          <Row NodeType="Concurrent" NodeId="20" TreeName="Simple Operation Attack" JumpTo="24" />
+            <Row NodeType="Recruit Units" NodeId="21" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Attack Units" NodeId="22" TreeName="Simple Operation Attack" />
+            <Row NodeType="Operation Attack" NodeId="23" TreeName="Simple Operation Attack" />
+  </BehaviorTreeNodes>
+
   <TreeData>
-    <Row DefnId="2" NodeId="8" TreeName="Simple Operation Attack" DefaultData="14" />
+    <Delete TreeName="Simple Operation Attack" />
+
+    <Row DefnId="0" NodeId="1" TreeName="Simple Operation Attack" DefaultData="50" />
+    <Row DefnId="0" NodeId="2" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="2" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="2" NodeId="2" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="0" NodeId="3" TreeName="Simple Operation Attack" DefaultData="-100" />
+    <Row DefnId="1" NodeId="3" TreeName="Simple Operation Attack" DefaultData="-100" />
+    <Row DefnId="0" NodeId="5" TreeName="Simple Operation Attack" Tag="Unused" />
+    <Row DefnId="1" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="2" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="3" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="4" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="5" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="6" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="7" NodeId="5" TreeName="Simple Operation Attack" />
+    <Row DefnId="8" NodeId="5" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="7" TreeName="Simple Operation Attack" Tag="Recruitment Contract" />
+    <Row DefnId="1" NodeId="7" TreeName="Simple Operation Attack" />
+    <Row DefnId="2" NodeId="7" TreeName="Simple Operation Attack" DefaultData="5" />
+    <Row DefnId="3" NodeId="7" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="0" NodeId="8" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="1" NodeId="8" TreeName="Simple Operation Attack" Tag="Recruitment Contract" />
+    <Row DefnId="2" NodeId="8" TreeName="Simple Operation Attack" DefaultData="14" /> <!-- RH: recruit range 14, so assembly can pull units from farther away. -->
+    <Row DefnId="4" NodeId="8" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="9" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="9" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="0" NodeId="12" TreeName="Simple Operation Attack" DefaultData="0" />
+    <Row DefnId="1" NodeId="12" TreeName="Simple Operation Attack" DefaultData="2" />
+    <Row DefnId="2" NodeId="12" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="3" NodeId="12" TreeName="Simple Operation Attack" DefaultData="2" />
+    <Row DefnId="0" NodeId="13" TreeName="Simple Operation Attack" DefaultData="20" /> <!-- Turns to Run: fails near count 10. -->
+    <Row DefnId="1" NodeId="13" TreeName="Simple Operation Attack" DefaultData="true" /> <!-- Fail at Limit: end the operation so the slot opens. -->
+    <Row DefnId="0" NodeId="15" TreeName="Simple Operation Attack" DefaultData="0" />
+    <Row DefnId="1" NodeId="15" TreeName="Simple Operation Attack" DefaultData="-2" />
+    <Row DefnId="0" NodeId="16" TreeName="Simple Operation Attack" DefaultData="True" />
+    <Row DefnId="4" NodeId="16" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="17" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="17" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="0" NodeId="18" TreeName="Simple Operation Attack" DefaultData="1" />
+    <Row DefnId="1" NodeId="18" TreeName="Simple Operation Attack" DefaultData="2" />
+    <Row DefnId="2" NodeId="18" TreeName="Simple Operation Attack" DefaultData="false" />
+    <Row DefnId="3" NodeId="18" TreeName="Simple Operation Attack" DefaultData="2" />
+    <Row DefnId="0" NodeId="19" TreeName="Simple Operation Attack" DefaultData="24" /> <!-- Turns to Run: fails near count 12. -->
+    <Row DefnId="1" NodeId="19" TreeName="Simple Operation Attack" DefaultData="true" /> <!-- Fail at Limit: end the operation so the slot opens. -->
+    <Row DefnId="0" NodeId="21" TreeName="Simple Operation Attack" DefaultData="True" />
+    <Row DefnId="2" NodeId="21" TreeName="Simple Operation Attack" DefaultData="8" />
+    <Row DefnId="4" NodeId="21" TreeName="Simple Operation Attack" Tag="Present Value" />
+    <Row DefnId="0" NodeId="22" TreeName="Simple Operation Attack" DefaultData="true" />
+    <Row DefnId="1" NodeId="22" TreeName="Simple Operation Attack" DefaultData="false" />
   </TreeData>
 
   <!--
@@ -447,7 +574,8 @@ Not applied here:
   the whole approach. In the final assault, Change Target 47 gets Backup Amount
   -100 (the WEAK swap is a team-strength test only; -5 or lower switches it
   off, as on root Node 5; Failure Amount -8 was already a sentinel, so the
-  final assault has no strength exit) and Attack Units 53 Attack Nearby false,
+  final assault had no strength exit until round 9 set it to -1, 2026-10-18)
+  and Attack Units 53 Attack Nearby false,
   so its Attack Near Target flag applies and units stop chasing units away
   from the city.
 
@@ -641,7 +769,7 @@ Not applied here:
     <Row DefnId="0" NodeId="45" TreeName="Siege City Assault" DefaultData="40" /> <!-- Final-assault Turn Limiter: fails near count 20. -->
     <Row DefnId="1" NodeId="45" TreeName="Siege City Assault" DefaultData="true" /> <!-- Fail at Limit: end the operation so the army can regroup. -->
     <Row DefnId="0" NodeId="47" TreeName="Siege City Assault" DefaultData="-100" /> <!-- W16 Backup Amount: -5 or lower switches the WEAK swap off (was -2). -->
-    <Row DefnId="1" NodeId="47" TreeName="Siege City Assault" DefaultData="-8" /> <!-- Failure Amount: -8 is also a sentinel, so TOO WEAK never fires here (before or after W16). -->
+    <Row DefnId="1" NodeId="47" TreeName="Siege City Assault" DefaultData="-1" /> <!-- Failure Amount: round 9 (2026-10-18) -8 -> -1, the engine's value for an absent row: a team weaker than EnemyStr - 1 x min(our, their military) ends the operation (TOO WEAK). -8 and below are sentinels (no exit). -->
     <Row DefnId="0" NodeId="48" TreeName="Siege City Assault" DefaultData="true" />
     <Row DefnId="2" NodeId="48" TreeName="Siege City Assault" DefaultData="12" /> <!-- Recruit range 12. -->
     <Row DefnId="4" NodeId="48" TreeName="Siege City Assault" Tag="Present Value" />
@@ -816,6 +944,81 @@ Not applied here:
   </OpTeamRequirements>
   <AllowedOperations>
     <Row ListType="Default_List" OperationDef="Rose Nuclear Strike" />
+  </AllowedOperations>
+
+  <!--
+  New operation: Rose Wartime Siege (round 7, HANDOFF W10, 2026-10-15)
+
+  The war director in Rose_AI_Gameplay.lua starts it with
+  StartScriptedOperationWithTargetAndRally on the enemy city it chose (the
+  nearest one to our cities, never a city-state) and a rally plot at the sent
+  unit nearest the target (our nearest city until round 8); nothing else
+  starts it (SelfStart false). It runs Rose's
+  Siege City Assault tree. Priority 4 since round 8 (2026-10-17; the ceiling,
+  as Rose Nuclear Strike): at 3 the AI's own planned siege took the director's
+  units in assembly (Persia t162-163 in the 20261017 game: its Rocket
+  Artillery and Giant Death Robot in its planned Attack Walled City team the
+  turn after the order); a recruit node steals only from a lower priority, or
+  from an equal one still recruiting, so City Defense (also 4) may still take
+  units (Persia's Tank, same turn). A scripted start marks the operation ready at once
+  (XP2 DLL: 0x4D216C sets the flag that IsReady 0x4DE580 returns first), so
+  the team's minimums are not enforced and the assembly phase neither
+  recruits nor contracts: the Lua adds the army itself (Nubia scenario
+  precedent), and the later Recruit nodes may add units within 12 tiles.
+  Definition: a copy of Wartime Attack Walled City as Rose sets it
+  (ROSE_WARTIME_ASSAULT, odds 0.3), TargetType TARGET_ENEMY_COMBAT_DISTRICT
+  with TargetParameter 1, as Rose Nuclear Strike: a running operation's target
+  stays valid walled or not with 1 (the validity check 0x4DE710 reads it at
+  0x4DE7DA), while 0 makes a walled city invalid unless a team test passes
+  (the "INVALID" end of an unwalled attack when walls go up, W30). Reach 0 in
+  region, area and world: the director chose the city, and a limit of 0
+  rejects every candidate in the per-turn target evaluation (0x4E6427), so the
+  operation should get no backup city; then it cannot swap mid-siege (the
+  WEAK rule at Change Target 38 needs a backup) and it ends when the city is
+  taken ("INVALID, No backup") instead of moving on. Inferred, to read in the
+  first game ("Changing to backup" against "No backup"). AllowTargetUpdate
+  only gates the team's rally point (0x4E28DB), not the swaps; false keeps
+  the rally at the plot Lua chose.
+  Team "Rose Siege Force": the City Attack Force rows as Rose sets them
+  (AI_BehaviorTreeOps.sql and the OpTeamRequirements above), with two
+  wall-breaking units (UNITTYPE_ROSE_SIEGE_STRIKE MinNumber 2 instead of 1).
+  Because the operation is ready at once these minimums do not gate it; they
+  may still shape what the later Recruit nodes add. Strength advantages are
+  the wartime walled ones (0.6 initial, 1.0 ongoing); the coastal naval team
+  is the base wartime one. Fresh games only.
+  -->
+  <AiOperationDefs>
+    <Row OperationName="Rose Wartime Siege" TargetType="TARGET_ENEMY_COMBAT_DISTRICT" TargetParameter="1"
+      EnemyType="WAR" BehaviorTree="Siege City Assault" Priority="4"
+      MaxTargetDistInRegion="0" MaxTargetDistInArea="0" MaxTargetDistInWorld="0"
+      MinOddsOfSuccess="0.3" SelfStart="false" MustBeAtWar="true" MustHaveUnits="6"
+      OperationType="ROSE_WARTIME_ASSAULT" AllowTargetUpdate="false" />
+  </AiOperationDefs>
+  <AiTeams>
+    <Row TeamName="Rose Siege Force" />
+  </AiTeams>
+  <AiOperationTeams>
+    <Row TeamName="Rose Siege Force" OperationName="Rose Wartime Siege"
+      InitialStrengthAdvantage="0.6" OngoingStrengthAdvantage="1.0" />
+    <Row TeamName="City Naval Attack Force" OperationName="Rose Wartime Siege"
+      InitialStrengthAdvantage="-5" OngoingStrengthAdvantage="3" Condition="IsCoastalTarget" />
+  </AiOperationTeams>
+  <OpTeamRequirements>
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_ROSE_CONTRACT_COMBAT" MinNumber="5" MaxNumber="16" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_ROSE_CONTRACT_MELEE" MinNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_RANGED" MinNumber="1" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_ROSE_SIEGE_STRIKE" MinNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="3" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_SIEGE_SUPPORT" AiTypeDependence="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_SIEGE_ALL" MinNumber="0" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_CIVILIAN_LEADER" MaxNumber="1" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_CIVILIAN" MaxNumber="0" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_AIR" MaxNumber="0" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_NAVAL" MaxNumber="0" />
+  </OpTeamRequirements>
+  <AllowedOperations>
+    <Row ListType="Default_List" OperationDef="Rose Wartime Siege" />
   </AllowedOperations>
 
   <!--

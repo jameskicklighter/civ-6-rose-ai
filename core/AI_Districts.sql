@@ -112,8 +112,11 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- districts above fill the early slots and section 1 drops the base Classical
 -- Campus favor, so Rose AIs built Campuses in 3-4% of their district
 -- contracts over three 174-199 turn games (vanilla 24%). The opening is left
--- growth-first; the second wave of districts should now include one.
-('RoseRenaissanceOnwardDistricts', 'DISTRICT_CAMPUS',     1, 50),
+-- growth-first; the second wave of districts should now include one. +50
+-- gave 8% of district contracts in two games (12% in one), so round 9
+-- (2026-10-18) sets +100, level with the other favored districts, together
+-- with Great Scientist points +50 (AI_Yields.sql).
+('RoseRenaissanceOnwardDistricts', 'DISTRICT_CAMPUS',     1, 100),
 -- Aerodrome from the Modern era (Flight). No base list favors it; AIs chose
 -- 2-4 per civ by turn 200, none for 2 of 8 (2026-10-09 test). Air combat
 -- demand is raised on the same strategy (AI_Yields.sql).

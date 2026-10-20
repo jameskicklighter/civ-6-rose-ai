@@ -10,7 +10,7 @@ local RoseAI = ExposedMembers.RoseAI;
 -- Per-turn diagnostic output (policy decks, slot lines, audit class changes).
 -- Off for release; the standalone Rose Policy Audit (DIAG) mod is the test
 -- instrument. Errors always print.
-local ROSE_VERBOSE_LOGS = false;
+local ROSE_VERBOSE_LOGS = true;
 
 function RoseGetMilitaryStrength(iPlayerID)
 	local pPlayer = Players[iPlayerID];
@@ -37,6 +37,29 @@ function RoseGetNetGoldIncome(iPlayerID)
 end
 
 RoseAI.GetNetGoldIncome = RoseGetNetGoldIncome;
+
+-- Envoys iMajorID has in city-state iMinorID and that city-state's suzerain
+-- (-1 for none), for the gameplay script's print-only report of operations
+-- against city-states (round 7, W27). Firaxis reads these from UI scripts
+-- (CityStates.lua, DeclareWarPopup_Expansion2.lua). false when iMinorID
+-- cannot receive envoys (not a city-state, such as the Free Cities); nil on
+-- any failure.
+function RoseGetEnvoyInfo(iMinorID, iMajorID)
+	local bOk, iTokens, iSuzerain = pcall(function()
+		local pMinor = Players[iMinorID];
+		if pMinor == nil then return nil; end
+		local pInfluence = pMinor:GetInfluence();
+		if pInfluence == nil then return nil; end
+		if not pInfluence:CanReceiveInfluence() then return false; end
+		return pInfluence:GetTokensReceived(iMajorID), pInfluence:GetSuzerain();
+	end);
+	if not bOk then return nil; end
+	if iTokens == false then return false; end
+	if type(iTokens) ~= "number" then return nil; end
+	return iTokens, iSuzerain;
+end
+
+RoseAI.GetEnvoyInfo = RoseGetEnvoyInfo;
 
 -- Stuck Trader diagnostic details (print-only; called from the gameplay
 -- script). Uses route and unit queries Firaxis calls from UI scripts

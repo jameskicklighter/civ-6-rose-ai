@@ -16,6 +16,8 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseClassicalYields'),
 ('RoseMedievalYields'),
 ('RoseRenaissanceYields'),
+-- Yield lists (this era or later; cumulative)
+('RoseRenaissanceOnwardYields'),
 -- PseudoYield lists (per era)
 ('RoseAncientPseudoYields'),
 ('RoseClassicalPseudoYields'),
@@ -37,7 +39,8 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAncientYields',    'Yields'),
 ('RoseClassicalYields',  'Yields'),
 ('RoseMedievalYields',   'Yields'),
-('RoseRenaissanceYields', 'Yields');
+('RoseRenaissanceYields', 'Yields'),
+('RoseRenaissanceOnwardYields', 'Yields');
 
 -- Era-linked pseudoyield lists
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
@@ -68,6 +71,7 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissancePseudoYields'),
 -- Cumulative "era or later" strategies, defined in AI_Strategies.sql.
 ('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'RoseRenaissanceOnwardPseudoYields'),
+('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'RoseRenaissanceOnwardYields'),
 ('STRATEGY_ROSE_INDUSTRIAL_ONWARD',  'RoseIndustrialOnwardPseudoYields'),
 ('STRATEGY_ROSE_MODERN_ONWARD',      'RoseModernOnwardPseudoYields');
 
@@ -150,4 +154,19 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 -- Air power from the Modern era (Flight). Base default 3.0, with +25 for
 -- Aggressive and Military Victory and +50 for the Airpower agenda. Aerodromes
 -- are favored on the same strategy (AI_Districts.sql). Carriers are left alone.
-('RoseModernOnwardPseudoYields',      'PSEUDOYIELD_UNIT_AIR_COMBAT',      1,  25);
+('RoseModernOnwardPseudoYields',      'PSEUDOYIELD_UNIT_AIR_COMBAT',      1,  25),
+-- Great Scientist points from the Renaissance era on (round 9, W26, 2026-10-18):
+-- the Campus is their source, and with the Campus favor alone (+50, then +100,
+-- AI_Districts.sql) Campuses stayed at 8% of AI district contracts in the two
+-- latest games (5% from t100 in 20261018; vanilla 24%).
+('RoseRenaissanceOnwardPseudoYields', 'PSEUDOYIELD_GPP_SCIENTIST',        1,  50);
+
+-- Science weight from the Renaissance era on (round 9, W26, 2026-10-18), with
+-- the Great Scientist points above. The round 9 DLL trace found the city-build
+-- evaluator (0x3E2DFC) reaching the per-yield list adjustment the trade-route
+-- planner uses (district and building value helpers 0x52A440, 0x52A8C0,
+-- 0x533190 -> 0x52B110 -> 0x4B6D70); that the adjustment sums the Yields
+-- lists is inferred, as in the trade-route trace. Measure Campus "Build City
+-- District" scores in AI_CityBuild.csv against the other districts.
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseRenaissanceOnwardYields', 'YIELD_SCIENCE', 1, 30);

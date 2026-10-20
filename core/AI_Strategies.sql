@@ -62,12 +62,16 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, Thres
 -- At War maintains unit replacement and deemphasizes optional infrastructure.
 -- It adds no assault slot: an extra slot (tried 2026-10-03) let Gaul run five
 -- assaults at once, mostly on city-states, with teams too small to take cities.
+-- Since round 7 (2026-10-15) it removes the planned (CITY_ASSAULT) slot, so a
+-- major war leaves the AI one wartime assault, aimed at a player it is at war
+-- with (a city-state at war with it still qualifies).
 -- It also stops new city-state wars, values enemy cities more and makes the
 -- AI willing to use nuclear weapons (see below).
 -- Military Recovery stacks when our military is below 70% of the combined
 -- opposing strength, trading one assault slot for defense and reconstruction.
 -- War Advantage suppresses voluntary peace only while our military is at
--- least 125% of the combined opposing strength.
+-- least 125% of the combined opposing strength, and adds a second wartime
+-- assault slot (round 7).
 -- Austerity (section 2b) nudges a broke AI toward income without touching its
 -- units or operations.
 -- ============================================================================
@@ -110,7 +114,9 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMilitaryRecoveryPseudoYields'),
 ('RoseMilitaryRecoveryBuildings'),
 ('RoseWarAdvantageDiplomacy'),
-('RoseAtWarDiplomacy');
+('RoseAtWarDiplomacy'),
+('RoseAtWarOperations'),
+('RoseWarAdvantageOperations');
 
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAtWarYields',                    'Yields'),
@@ -120,7 +126,9 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseMilitaryRecoveryPseudoYields',   'PseudoYields'),
 ('RoseMilitaryRecoveryBuildings',      'Buildings'),
 ('RoseWarAdvantageDiplomacy',          'DiplomaticActions'),
-('RoseAtWarDiplomacy',                 'DiplomaticActions');
+('RoseAtWarDiplomacy',                 'DiplomaticActions'),
+('RoseAtWarOperations',                'AiOperationTypes'),
+('RoseWarAdvantageOperations',         'AiOperationTypes');
 
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_AT_WAR',            'RoseAtWarYields'),
@@ -130,7 +138,9 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryPseudoYields'),
 ('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryBuildings'),
 ('STRATEGY_ROSE_WAR_ADVANTAGE',     'RoseWarAdvantageDiplomacy'),
-('STRATEGY_ROSE_AT_WAR',            'RoseAtWarDiplomacy');
+('STRATEGY_ROSE_AT_WAR',            'RoseAtWarDiplomacy'),
+('STRATEGY_ROSE_AT_WAR',            'RoseAtWarOperations'),
+('STRATEGY_ROSE_WAR_ADVANTAGE',     'RoseWarAdvantageOperations');
 
 INSERT OR REPLACE INTO AiFavoredItems
     (ListType, Item, Favored, Value) VALUES
@@ -170,6 +180,21 @@ INSERT OR REPLACE INTO AiFavoredItems
 -- war with us; the engine's Nuclear Assault is off (AI_BehaviorTrees.xml).
 -- Inside At War's 20-turn restart window the engine's own rule applies.
 ('RoseAtWarDiplomacy', 'DIPLOACTION_USE_NUCLEAR_WEAPON',         1,   0),
+-- One assault at a time during a major war (round 7, W31/W10, 2026-10-15).
+-- The planned slot goes (base 1, +1 only for a Military Victory AI); the
+-- one wartime slot (ROSE_WARTIME_ASSAULT, AI_BehaviorTreeOps.sql) stays, and
+-- wartime definitions target only players we are at war with. In the 2026-10-15
+-- game planned assaults kept picking city-states during major wars and Khmer
+-- ran three assaults with seven units. Running operations are not cut: the
+-- limit is checked only when an operation starts. With Military Recovery's -1
+-- as well the planned limit goes below zero, which blocks like zero (signed
+-- compare in the DLL's start check). Side effects: a formal or surprise war
+-- needs a ready operation against the target and only planned definitions
+-- target players we are not at war with, so during a major war an AI without
+-- Military Victory declares no new war; Aid Ally (also CITY_ASSAULT) does not
+-- start either. A Military Victory AI with War Advantage can still run three
+-- assaults (1 planned + 2 wartime).
+('RoseAtWarOperations', 'CITY_ASSAULT',                          1,  -1),
 
 -- Recovery stacks with At War and temporarily favors rebuilding over attack.
 -- The -1 removes the planned (CITY_ASSAULT) slot; the wartime slot type
@@ -192,7 +217,10 @@ INSERT OR REPLACE INTO AiFavoredItems
 
 -- Strong AIs keep pressing; weak and evenly matched AIs retain normal peace logic.
 ('RoseWarAdvantageDiplomacy', 'DIPLOACTION_PROPOSE_PEACE_DEAL', 0, 0),
-('RoseWarAdvantageDiplomacy', 'DIPLOACTION_MAKE_PEACE',         0, 0);
+('RoseWarAdvantageDiplomacy', 'DIPLOACTION_MAKE_PEACE',         0, 0),
+-- A dominant AI may run a second wartime siege (the "massive attack" of the
+-- W10 doctrine, round 7).
+('RoseWarAdvantageOperations', 'ROSE_WARTIME_ASSAULT',          1, 1);
 
 -- ============================================================================
 -- 2b. AUSTERITY (income nudge for a broke AI)

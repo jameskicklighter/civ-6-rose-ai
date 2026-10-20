@@ -15,26 +15,27 @@
       <Properties>
         <LoadOrder>600</LoadOrder>
       </Properties>
-      <File>core/strategies/Rose_Strategies.sql</File>
-      <File>core/strategies/Rose_Strategy_Lists.sql</File>
-      <File>core/leaders/Rose_Leader_Traits.sql</File>
-      <File>core/leaders/Rose_Leader_Lists.sql</File>
-      <File>core/economy/Rose_Techs_Civics.sql</File>
-      <File>core/economy/Rose_Yields.sql</File>
-      <File>core/economy/Rose_Districts.sql</File>
-      <File>core/economy/Rose_Units.sql</File>
-      <File>core/choices/Rose_Belief_Signals.sql</File>
-      <File>core/choices/Rose_Policy_Signals.sql</File>
-      <File>core/military/Rose_Operation_Roles.sql</File>
-      <File>core/military/Operations.xml</File>
-      <File>core/military/trees/Simple_Operation_Attack.xml</File>
-      <File>core/military/trees/Simple_City_Defense.xml</File>
-      <File>core/military/trees/Naval_Superiority.xml</File>
-      <File>core/military/trees/Siege_City_Assault.xml</File>
-      <File>core/military/trees/Early_City_Assault.xml</File>
-      <File>core/military/trees/Nuclear_Assault.xml</File>
-      <File>core/military/trees/Rose_Nuclear_Strike.xml</File>
-      <File>core/military/trees/Rose_Wartime_Siege.xml</File>
+      <!-- The game loads these by Priority, highest first (then by path), whatever their order here. -->
+      <File Priority="20">core/military/Rose_Operation_Roles.sql</File>
+      <File Priority="19">core/military/Operations.xml</File>
+      <File Priority="18">core/military/trees/Simple_Operation_Attack.xml</File>
+      <File Priority="17">core/military/trees/Simple_City_Defense.xml</File>
+      <File Priority="16">core/military/trees/Naval_Superiority.xml</File>
+      <File Priority="15">core/military/trees/Siege_City_Assault.xml</File>
+      <File Priority="14">core/military/trees/Early_City_Assault.xml</File>
+      <File Priority="13">core/military/trees/Nuclear_Assault.xml</File>
+      <File Priority="12">core/military/trees/Rose_Nuclear_Strike.xml</File>
+      <File Priority="11">core/military/trees/Rose_Wartime_Siege.xml</File>
+      <File Priority="10">core/choices/Rose_Belief_Signals.sql</File>
+      <File Priority="9">core/economy/Rose_Districts.sql</File>
+      <File Priority="8">core/leaders/Rose_Leader_Traits.sql</File>
+      <File Priority="7">core/leaders/Rose_Leader_Lists.sql</File>
+      <File Priority="6">core/choices/Rose_Policy_Signals.sql</File>
+      <File Priority="5">core/strategies/Rose_Strategies.sql</File>
+      <File Priority="4">core/strategies/Rose_Strategy_Lists.sql</File>
+      <File Priority="3">core/economy/Rose_Techs_Civics.sql</File>
+      <File Priority="2">core/economy/Rose_Units.sql</File>
+      <File Priority="1">core/economy/Rose_Yields.sql</File>
     </UpdateDatabase>
 
     <ImportFiles id="ROSE_AI_MODULES">

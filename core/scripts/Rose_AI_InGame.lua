@@ -1,6 +1,11 @@
--- Rose AI InGame UI bridge for military strength, net Gold income and dead
--- policy slots, plus the policy-modifier audit behind them. These getters and
--- GameEffects are unavailable in the gameplay context.
+-- ============================================================================
+-- Rose AI InGame UI bridge: military strength, net Gold income, envoys, Trader
+-- details and dead policy slots for the gameplay scripts (ExposedMembers.RoseAI),
+-- plus the policy-modifier audit behind the dead slots. These getters and
+-- GameEffects are unavailable in the gameplay context. Hooks: Events.TurnBegin,
+-- the civic/government/policy events and GameCoreEventPublishComplete; no saved
+-- state. AGENTS.md "Rose_AI_InGame.lua / Rose_AI_InGame.xml".
+-- ============================================================================
 
 print("Rose_AI_InGame: Rose AI: Loading InGame military-strength bridge");
 
@@ -38,12 +43,9 @@ end
 
 RoseAI.GetNetGoldIncome = RoseGetNetGoldIncome;
 
--- Envoys iMajorID has in city-state iMinorID and that city-state's suzerain
--- (-1 for none), for the gameplay script's print-only report of operations
--- against city-states (round 7, W27). Firaxis reads these from UI scripts
--- (CityStates.lua, DeclareWarPopup_Expansion2.lua). false when iMinorID
--- cannot receive envoys (not a city-state, such as the Free Cities); nil on
--- any failure.
+-- Envoys iMajorID has in city-state iMinorID and its suzerain (-1 for none),
+-- as Firaxis UI scripts read them; false when iMinorID cannot receive envoys
+-- (such as the Free Cities); nil on any failure.
 function RoseGetEnvoyInfo(iMinorID, iMajorID)
 	local bOk, iTokens, iSuzerain = pcall(function()
 		local pMinor = Players[iMinorID];
@@ -61,10 +63,8 @@ end
 
 RoseAI.GetEnvoyInfo = RoseGetEnvoyInfo;
 
--- Stuck Trader diagnostic details (print-only; called from the gameplay
--- script). Uses route and unit queries Firaxis calls from UI scripts
--- (TradeOverview, UnitPanel, WorldInput). Each part is queried separately so
--- one failure still leaves the others; a failed part prints "?".
+-- Stuck Trader diagnostic details, from route and unit queries Firaxis calls
+-- in UI scripts. Each part is queried separately; a failed part prints "?".
 function RoseGetTraderDiagnostics(iPlayerID, iUnitID, iX, iY)
 	local function Try(fn)
 		local bOk, value = pcall(fn);
@@ -119,25 +119,15 @@ end
 
 RoseAI.GetTraderDiagnostics = RoseGetTraderDiagnostics;
 
--- Policy-modifier audit (HANDOFF W13, W15). GameEffects is only available in
--- UI contexts. For each major (humans included), every PolicyModifiers row of
--- a slotted policy and every GovernmentModifiers row of the current
--- government, except Rose's inactive ROSE_CHOICE_* signals, is matched against
--- live modifier instances owned by that player:
---   OK       an active instance with at least one subject
---   NOSUBJ   active instances, none with subjects (not necessarily a bug)
---   INACTIVE instances exist, none active
---   MISSING  no instance
--- Each audit records the player's dead slots (a slotted card with a MISSING
--- modifier) for RoseAI.GetDeadPolicySlots. The gameplay script clears AI slots
--- from that result, so like the strength bridge this feeds synchronized state
--- from a UI reading. With ROSE_VERBOSE_LOGS on, the deck is printed when it
--- changes, and a row when its class changes since the previous audit of that
--- player; rows new to the deck (and every row on the first audit after load)
--- only when not OK. Instance matching is by ModifierId and owner player, so a
--- ModifierId shared by two sources reports the same counts for both.
--- Runs for all alive majors at TurnBegin, and for players marked dirty by civic,
--- government, or policy events once the engine finishes publishing the batch.
+-- ============================================================================
+-- Policy-modifier audit: for each major, every modifier row of its slotted
+-- policies and government (except Rose's ROSE_CHOICE_* signals) is matched by
+-- ModifierId and owner against live instances: OK (active with subjects), NOSUBJ
+-- (active, no subjects), INACTIVE or MISSING (no instance). It records the dead
+-- slots (a card with a MISSING modifier) for RoseAI.GetDeadPolicySlots; with
+-- ROSE_VERBOSE_LOGS it prints deck changes and class changes. AGENTS.md
+-- "Policy-modifier audit".
+-- ============================================================================
 local AUDIT_SIGNAL_PREFIX = "ROSE_CHOICE_";
 local tAuditModsBySource = nil;
 local tAuditRelevant = nil;
@@ -151,7 +141,7 @@ local tDeadPolicySlots = {};
 local function BuildAuditTables()
 	if tAuditModsBySource ~= nil then return; end
 	-- The signals' ModifierIds are the RoseChoiceBiases BiasIds, all prefixed
-	-- ROSE_CHOICE_ (AI_Policies.sql, AI_Beliefs.sql). Read the table when it is
+	-- ROSE_CHOICE_ (the belief and policy signal SQL). Read the table when it is
 	-- visible here and keep the prefix as a fallback.
 	local tSignals = {};
 	pcall(function()
@@ -194,10 +184,9 @@ local function ReadDeck(pPlayer)
 		sGovernment = kGovernment.GovernmentType;
 		table.insert(tSources, sGovernment);
 	end
-	-- Slot check (2026-10-07): each slot's type against its card's type, and
-	-- whether the card is obsolete, to tell a card the engine will not attach
-	-- (wrong slot type after a government re-layout, or obsolete) from one it
-	-- simply lost. Printed as a separate "Policy slots" line with the deck.
+	-- Slot check: each slot's type against its card's, and whether the card is
+	-- obsolete, to tell a card the engine will not attach from one it lost.
+	-- Printed as a separate "Policy slots" line with the deck.
 	local tSlots = {};
 	local tSlotPolicies = {};
 	for iSlot = 0, pCulture:GetNumPolicySlots() - 1 do
@@ -262,13 +251,9 @@ local function AuditPolicyModifiers(tOnly)
 	if #tTargetIDs == 0 then return; end
 	table.sort(tTargetIDs);
 
-	-- One pass over live instances; filter by owner first (cheap), then Id.
-	-- Each instance is queried in its own pcall, so one bad instance (for
-	-- example an owner that is not a player) cannot stop the whole audit.
-	-- Self-check (2026-10-07): every relevant instance is also counted game-wide
-	-- by resolved owner player, or by owner object when no player resolves, and
-	-- the totals are printed on MISSING rows. If a MISSING card shows instances
-	-- under an unresolved owner, the audit's owner matching is wrong, not the card.
+	-- One pass over live instances, each in its own pcall. Every relevant
+	-- instance is also counted game-wide by owner (printed on MISSING rows), so
+	-- an instance under an unresolved owner points at the owner matching.
 	local tGlobal = {};
 	local function CountInstance(iInstance)
 		local iOwnerObject = GameEffects.GetModifierOwner(iInstance);
@@ -353,12 +338,9 @@ local function AuditPolicyModifiers(tOnly)
 		end
 		tAuditClass[iPlayerID] = tNew;
 
-		-- Dead cards for the repair (HANDOFF W15): a slotted policy with at
-		-- least one audited modifier that has no instance at all (MISSING).
-		-- Policy modifiers have no owner requirements and none is RunOnce, so a
-		-- slotted card always has its instances unless the engine lost them.
-		-- After instance query errors an uncounted modifier would read MISSING,
-		-- so that audit publishes no dead list (the bridge returns nil).
+		-- Dead cards for the repair: a slotted policy with an audited modifier
+		-- that has no instance at all. After instance query errors an uncounted
+		-- modifier would read MISSING, so that audit publishes no dead list.
 		local tDead = {};
 		for _, kSlot in ipairs(tTarget.SlotPolicies) do
 			local iMissing = 0;
@@ -378,13 +360,9 @@ local function RunPolicyAudit(tOnly)
 	if not bOk then print("Rose_AI_InGame: Rose AI ERROR: Policy audit: " .. tostring(sError)); end
 end
 
--- Dead policy slots of one player for the gameplay repair (HANDOFF W15), as a
--- fresh array of { Slot, PolicyType, Missing }; empty when every slotted card
--- has its modifiers, nil when the audit could not run or skipped instances
--- after query errors. Uses this turn's audit
--- of the player when there is one, otherwise audits every major first (one
--- modifier pass per turn at most, shared with the TurnBegin audit). The
--- gameplay script re-checks each slot against its own data before clearing.
+-- Dead policy slots of one player, a fresh array of { Slot, PolicyType, Missing },
+-- from this turn's audit (one audit of every major first when there is none);
+-- nil when the audit could not run or skipped instances after query errors.
 function RoseGetDeadPolicySlots(iPlayerID)
 	local iTurn = Game.GetCurrentGameTurn();
 	local kEntry = tDeadPolicySlots[iPlayerID];

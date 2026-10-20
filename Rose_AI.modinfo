@@ -15,46 +15,83 @@
       <Properties>
         <LoadOrder>600</LoadOrder>
       </Properties>
-      <File>core/AI_Strategies.sql</File>
-      <File>core/AI_Leaders.sql</File>
-      <File>core/AI_Techs.sql</File>
-      <File>core/AI_Yields.sql</File>
-      <File>core/AI_Districts.sql</File>
-      <File>core/AI_Units.sql</File>
-      <File>core/AI_Beliefs.sql</File>
-      <File>core/AI_Policies.sql</File>
-      <File>core/AI_BehaviorTreeOps.sql</File>
-      <File>core/AI_BehaviorTrees.xml</File>
+      <File>core/strategies/Rose_Strategies.sql</File>
+      <File>core/strategies/Rose_Strategy_Lists.sql</File>
+      <File>core/leaders/Rose_Leader_Traits.sql</File>
+      <File>core/leaders/Rose_Leader_Lists.sql</File>
+      <File>core/economy/Rose_Techs_Civics.sql</File>
+      <File>core/economy/Rose_Yields.sql</File>
+      <File>core/economy/Rose_Districts.sql</File>
+      <File>core/economy/Rose_Units.sql</File>
+      <File>core/choices/Rose_Belief_Signals.sql</File>
+      <File>core/choices/Rose_Policy_Signals.sql</File>
+      <File>core/military/Rose_Operation_Roles.sql</File>
+      <File>core/military/Operations.xml</File>
+      <File>core/military/trees/Simple_Operation_Attack.xml</File>
+      <File>core/military/trees/Simple_City_Defense.xml</File>
+      <File>core/military/trees/Naval_Superiority.xml</File>
+      <File>core/military/trees/Siege_City_Assault.xml</File>
+      <File>core/military/trees/Early_City_Assault.xml</File>
+      <File>core/military/trees/Nuclear_Assault.xml</File>
+      <File>core/military/trees/Rose_Nuclear_Strike.xml</File>
+      <File>core/military/trees/Rose_Wartime_Siege.xml</File>
     </UpdateDatabase>
+
+    <ImportFiles id="ROSE_AI_MODULES">
+      <File>core/scripts/Rose_AI_Core.lua</File>
+      <File>core/scripts/Rose_AI_Civics.lua</File>
+      <File>core/scripts/Rose_AI_Strategies.lua</File>
+      <File>core/scripts/Rose_AI_Naval.lua</File>
+      <File>core/scripts/Rose_AI_Nuclear.lua</File>
+      <File>core/scripts/Rose_AI_Director.lua</File>
+      <File>core/scripts/Rose_AI_Diagnostics.lua</File>
+    </ImportFiles>
 
     <AddUserInterfaces id="ROSE_AI_INGAME_BRIDGE">
       <Properties>
         <Context>InGame</Context>
       </Properties>
-      <File>core/Rose_AI_InGame.xml</File>
+      <File>core/scripts/Rose_AI_InGame.xml</File>
     </AddUserInterfaces>
 
     <AddGameplayScripts id="ROSE_AI_SCRIPTS">
-      <File>core/Rose_AI_ChoiceMarkers.lua</File>
-      <File>core/Rose_AI_Gameplay.lua</File>
+      <File>core/scripts/Rose_AI_ChoiceMarkers.lua</File>
+      <File>core/scripts/Rose_AI_Gameplay.lua</File>
     </AddGameplayScripts>
 
   </InGameActions>
 
   <Files>
-    <File>core/AI_Strategies.sql</File>
-    <File>core/AI_Leaders.sql</File>
-    <File>core/AI_Techs.sql</File>
-    <File>core/AI_Yields.sql</File>
-    <File>core/AI_Districts.sql</File>
-    <File>core/AI_Units.sql</File>
-    <File>core/AI_Beliefs.sql</File>
-    <File>core/AI_Policies.sql</File>
-    <File>core/AI_BehaviorTreeOps.sql</File>
-    <File>core/AI_BehaviorTrees.xml</File>
-    <File>core/Rose_AI_Gameplay.lua</File>
-    <File>core/Rose_AI_ChoiceMarkers.lua</File>
-    <File>core/Rose_AI_InGame.lua</File>
-    <File>core/Rose_AI_InGame.xml</File>
+    <File>core/strategies/Rose_Strategies.sql</File>
+    <File>core/strategies/Rose_Strategy_Lists.sql</File>
+    <File>core/leaders/Rose_Leader_Traits.sql</File>
+    <File>core/leaders/Rose_Leader_Lists.sql</File>
+    <File>core/economy/Rose_Techs_Civics.sql</File>
+    <File>core/economy/Rose_Yields.sql</File>
+    <File>core/economy/Rose_Districts.sql</File>
+    <File>core/economy/Rose_Units.sql</File>
+    <File>core/choices/Rose_Belief_Signals.sql</File>
+    <File>core/choices/Rose_Policy_Signals.sql</File>
+    <File>core/military/Rose_Operation_Roles.sql</File>
+    <File>core/military/Operations.xml</File>
+    <File>core/military/trees/Simple_Operation_Attack.xml</File>
+    <File>core/military/trees/Simple_City_Defense.xml</File>
+    <File>core/military/trees/Naval_Superiority.xml</File>
+    <File>core/military/trees/Siege_City_Assault.xml</File>
+    <File>core/military/trees/Early_City_Assault.xml</File>
+    <File>core/military/trees/Nuclear_Assault.xml</File>
+    <File>core/military/trees/Rose_Nuclear_Strike.xml</File>
+    <File>core/military/trees/Rose_Wartime_Siege.xml</File>
+    <File>core/scripts/Rose_AI_Gameplay.lua</File>
+    <File>core/scripts/Rose_AI_Core.lua</File>
+    <File>core/scripts/Rose_AI_Civics.lua</File>
+    <File>core/scripts/Rose_AI_Strategies.lua</File>
+    <File>core/scripts/Rose_AI_Naval.lua</File>
+    <File>core/scripts/Rose_AI_Nuclear.lua</File>
+    <File>core/scripts/Rose_AI_Director.lua</File>
+    <File>core/scripts/Rose_AI_Diagnostics.lua</File>
+    <File>core/scripts/Rose_AI_ChoiceMarkers.lua</File>
+    <File>core/scripts/Rose_AI_InGame.lua</File>
+    <File>core/scripts/Rose_AI_InGame.xml</File>
   </Files>
 </Mod>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Simple City Defense: replaces the base tree with RH's version (threatened-city check, then defense,
+recruitment, attacks and movement together instead of garrisoning only). New node ids 0-10.
+Hand-written; Defend Units data uses DefnId 0 for AutoProtect Percentage (RH labeled it DefnId 1).
+AGENTS.md "City Defense cap", 'Known engine behaviour: behavior-tree node semantics'.
+-->
+<GameInfo>
+
+  <BehaviorTreeNodes>
+    <Delete TreeName="Simple City Defense" />
+
+    <Row NodeType="Concurrent" NodeId="0" TreeName="Simple City Defense" JumpTo="11" />
+      <Row NodeType="Is City Threatened" NodeId="1" TreeName="Simple City Defense" />
+      <Row NodeType="Operation Defend Units" NodeId="2" TreeName="Simple City Defense" />
+      <Row NodeType="Concurrent" NodeId="3" TreeName="Simple City Defense" JumpTo="11" />
+        <Row NodeType="Recruit Units" NodeId="4" TreeName="Simple City Defense" />
+        <Row NodeType="Priority" NodeId="5" TreeName="Simple City Defense" JumpTo="8" />
+          <Row NodeType="Can Alpha City" NodeId="6" TreeName="Simple City Defense" />
+          <Row NodeType="Garrison City" NodeId="7" TreeName="Simple City Defense" />
+        <Row NodeType="Operation Attack Units" NodeId="8" TreeName="Simple City Defense" />
+        <Row NodeType="Operation Attack City" NodeId="9" TreeName="Simple City Defense" />
+        <Row NodeType="Operation Move" NodeId="10" TreeName="Simple City Defense" />
+  </BehaviorTreeNodes>
+
+  <TreeData>
+    <Delete TreeName="Simple City Defense" />
+
+    <!-- Defend Units 2: AutoProtect Percentage 25, Protect Outside Range 5. -->
+    <Row DefnId="0" NodeId="2" TreeName="Simple City Defense" DefaultData="25" />
+    <Row DefnId="1" NodeId="2" TreeName="Simple City Defense" DefaultData="5" />
+    <!-- Recruit Units 4: in progress, range 15, stealing and levying allowed. -->
+    <Row DefnId="0" NodeId="4" TreeName="Simple City Defense" DefaultData="true" />
+    <Row DefnId="2" NodeId="4" TreeName="Simple City Defense" DefaultData="15" />
+    <Row DefnId="6" NodeId="4" TreeName="Simple City Defense" DefaultData="true" />
+    <Row DefnId="7" NodeId="4" TreeName="Simple City Defense" DefaultData="true" />
+    <!-- Attack Units 8: nearby units, along the march, unequal attacks allowed. -->
+    <Row DefnId="0" NodeId="8" TreeName="Simple City Defense" DefaultData="true" />
+    <Row DefnId="1" NodeId="8" TreeName="Simple City Defense" DefaultData="true" />
+    <Row DefnId="2" NodeId="8" TreeName="Simple City Defense" DefaultData="true" />
+    <!-- Operation Move 10: move-to enum 1, range to goal 1, validate new units, spacing 2, keep running. -->
+    <Row DefnId="0" NodeId="10" TreeName="Simple City Defense" DefaultData="1" />
+    <Row DefnId="1" NodeId="10" TreeName="Simple City Defense" DefaultData="1" />
+    <Row DefnId="2" NodeId="10" TreeName="Simple City Defense" DefaultData="true" />
+    <Row DefnId="3" NodeId="10" TreeName="Simple City Defense" DefaultData="2" />
+    <Row DefnId="5" NodeId="10" TreeName="Simple City Defense" DefaultData="true" />
+  </TreeData>
+
+</GameInfo>

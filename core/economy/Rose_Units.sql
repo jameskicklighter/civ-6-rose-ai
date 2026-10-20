@@ -1,35 +1,30 @@
 -- ============================================================================
--- Rose AI: Unit Priorities
--- Builders favored in Medieval and Renaissance eras to coincide with Serfdom
--- policy (+2 Builder charges) and general improvement needs.
+-- Rose AI: unit priorities and the AI-only unit modifiers (Prince and above,
+-- through the base requirement set PLAYER_IS_HIGH_DIFFICULTY_AI).
+-- AGENTS.md "## Current Features", "### economy/Rose_Units.sql".
 -- ============================================================================
 
--- Declare list types
+-- Medieval: Builders, with Serfdom's extra charges; AGENTS.md "Builders favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseMedievalUnits'),
-('RoseRenaissanceUnits');
-
--- Map to Units system
+('RoseMedievalUnits');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseMedievalUnits',     'Units'),
-('RoseRenaissanceUnits',  'Units');
-
--- Link to era strategies
+('RoseMedievalUnits',     'Units');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalUnits'),
-('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceUnits');
-
--- Populate — Builders favored so AI invests in improvements
+('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalUnits');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMedievalUnits',     'UNIT_BUILDER', 1, 100),
+('RoseMedievalUnits',     'UNIT_BUILDER', 1, 100);
+
+-- Renaissance: Builders; AGENTS.md "Builders favored"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseRenaissanceUnits');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseRenaissanceUnits',  'Units');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceUnits');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseRenaissanceUnits',  'UNIT_BUILDER', 1, 100);
 
--- ============================================================================
--- AI Anti-Barbarian Combat Bonus (+5 strength, Prince difficulty and above)
--- Uses base game requirement set PLAYER_IS_HIGH_DIFFICULTY_AI which combines
--- REQUIRES_PLAYER_IS_AI + REQUIRES_HIGH_DIFFICULTY (Prince+)
--- ============================================================================
-
+-- +5 combat strength against barbarians for AI majors; AGENTS.md "Anti-barbarian combat bonus"
 INSERT OR IGNORE INTO TraitModifiers (TraitType, ModifierId) VALUES
 ('TRAIT_LEADER_MAJOR_CIV', 'ROSE_BARB_COMBAT_AI');
 
@@ -39,16 +34,9 @@ INSERT OR IGNORE INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId
 INSERT OR IGNORE INTO ModifierArguments (ModifierId, Name, Value) VALUES
 ('ROSE_BARB_COMBAT_AI', 'Amount', 5);
 
--- ============================================================================
--- AI unit upgrade discount (Prince difficulty and above)
--- AI armies kept obsolete units (Trebuchets beside Field Cannons, Crossbowmen
--- beside Line Infantry in 2026-10 logs). Upgrades cost 35% less Gold and 35%
--- fewer strategic resources, as in RH (LAI_Main3.sql). Stacks with Professional
--- Army (50%). The AI still upgrades only when its Upgrade Units tree runs.
--- Same requirement set as the barbarian bonus above (AI + Prince or higher).
--- The resource discount is Gathering Storm only and is skipped without it.
--- ============================================================================
-
+-- AI upgrades cost 35% less Gold and 35% fewer strategic resources (the
+-- resource modifier exists only with Gathering Storm and is skipped without
+-- it); AGENTS.md "AI upgrade discount"
 INSERT OR IGNORE INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId) VALUES
 ('ROSE_AI_UPGRADE_GOLD_DISCOUNT', 'MODIFIER_PLAYER_ADJUST_UNIT_UPGRADE_DISCOUNT_PERCENT', 'PLAYER_IS_HIGH_DIFFICULTY_AI');
 

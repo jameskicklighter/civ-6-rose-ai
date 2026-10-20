@@ -1,8 +1,11 @@
--- The belief scorer understands CITY_HAS_BUILDING, but not the required leader
--- or general-war checks. Crusade uses military markers; Defender of the Faith
--- uses temporary major-war markers. Each signal also requires a Palace. Markers stay
--- in all eligible cities so native Palace movement needs no special Lua hook.
--- This helper never modifies beliefs, yields, policy slots, or envoy balances.
+-- ============================================================================
+-- Rose AI: choice marker helper (a separate gameplay script). The belief scorer
+-- reads CITY_HAS_BUILDING but not leader-trait or war checks, so this marks
+-- every eligible city with an internal building: military AIs (Crusade) and AIs
+-- at war with a major (Defender of the Faith). Hooks: PlayerTurnStarted,
+-- PlayerTurnStartComplete, CityBuilt, CityConquered; no saved state. It never
+-- touches beliefs, yields, policy slots or envoys. AGENTS.md "Rose_AI_ChoiceMarkers.lua".
+-- ============================================================================
 
 local marker = GameInfo.Buildings["BUILDING_ROSE_MILITARY_CHOICE_MARKER"];
 local markerIndex = marker ~= nil and marker.Index or nil;
@@ -98,12 +101,9 @@ local function ReconcileMarkers()
     if not ok then print("Rose AI ERROR: Choice marker reconciliation: " .. tostring(err)); end
 end
 
--- These gameplay hooks are used by Firaxis scenario scripts. Reconciliation
--- also runs after loading, before AI choices on the next player's turn.
--- Only synchronized GameEvents mutate markers. UI-side Events (war, peace,
--- city transfer) are not used: they are delivered locally on each machine, so
--- building changes made from them could land at different times in multiplayer.
--- The next player's turn-start hook picks up those changes instead.
+-- Only synchronized GameEvents change markers (UI Events reach each machine at
+-- its own time in multiplayer); a mid-turn war, peace or trade is picked up by
+-- the next player's turn start, which also reconciles after a load.
 GameEvents.PlayerTurnStarted.Add(ReconcileMarkers);
 GameEvents.PlayerTurnStartComplete.Add(ReconcileMarkers);
 GameEvents.CityBuilt.Add(ReconcileMarkers);

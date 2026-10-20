@@ -171,7 +171,7 @@ For a fresh-game test:
 
 1. In `Modding.log`, confirm that `ROSE_AI`, `ROSE_AI_INGAME_BRIDGE`, and `ROSE_AI_SCRIPTS` load.
 2. In `Database.log`, look for Rose-related SQL/XML errors and confirm gameplay foreign-key validation passes.
-3. In `Lua.log`, search for `Rose AI:` load, civic-grant, war-state, policy-repair, naval-operation, and runtime-error messages. Per-turn diagnostics (policy audit, stuck Traders) are off by default; set `ROSE_VERBOSE_LOGS = true` at the top of `Rose_AI_Gameplay.lua` and `Rose_AI_InGame.lua` to turn them on.
+3. In `Lua.log`, search for `Rose AI:` load, civic-grant, war-state, policy-repair, naval-operation, and runtime-error messages. Per-turn diagnostics (policy audit, stuck Traders) are off by default; set `ROSE_VERBOSE_LOGS = true` at the top of `core/scripts/Rose_AI_Core.lua` and `core/scripts/Rose_AI_InGame.lua` to turn them on.
 4. For military behavior, correlate `AI_Behavior_Trees.csv`, `AI_Operation.csv`, `AI_Operation_Eval.csv`, `AI_CityBuild.csv`, and `UnitOperations.log`.
 
 A behavior-tree `SUCCESS` means that a node completed or accepted its task; it does not by itself prove that a unit carried out the intended map action. Confirm movement, attacks, and pillaging in `UnitOperations.log` or in-game observation.
@@ -181,18 +181,29 @@ A behavior-tree `SUCCESS` means that a node completed or accepted its task; it d
 ```text
 Rose_AI.modinfo                 Mod metadata and component load order
 core/
-  AI_Strategies.sql            Era and dynamic war strategies
-  AI_Leaders.sql               Leader traits and leader-specific priorities
-  AI_Techs.sql                 Technology and civic priorities
-  AI_Yields.sql                Era yield and pseudoyield preferences
-  AI_Districts.sql             District priorities
-  AI_Units.sql                 Builder priorities, barbarian bonus, upgrade discount
-  AI_Beliefs.sql               Shared choice-signal registry and belief preferences
-  AI_Policies.sql              Conditional inactive choice-signal modifiers
-  AI_BehaviorTreeOps.sql        Operation roles and concurrency limits
-  AI_BehaviorTrees.xml          Operation-team and behavior-tree tuning
-  Rose_AI_Gameplay.lua         Civic grants, choice audits, war and naval logic
-  Rose_AI_InGame.lua/.xml      UI-side readings (military strength, income, policy audit)
+  strategies/
+    Rose_Strategies.sql        Era and dynamic war and austerity strategies
+    Rose_Strategy_Lists.sql    Lists attached to the war and austerity strategies
+  leaders/
+    Rose_Leader_Traits.sql     Leader trait membership and Rose's leader traits
+    Rose_Leader_Lists.sql      Leader-specific priorities
+  economy/
+    Rose_Techs_Civics.sql      Technology and civic priorities
+    Rose_Yields.sql            Era yield and pseudoyield preferences
+    Rose_Districts.sql         District priorities
+    Rose_Units.sql             Builder priorities, barbarian bonus, upgrade discount
+  choices/
+    Rose_Belief_Signals.sql    Shared choice-signal registry and belief preferences
+    Rose_Policy_Signals.sql    Conditional inactive choice-signal modifiers
+  military/
+    Rose_Operation_Roles.sql   Operation roles and concurrency limits
+    Operations.xml             Operation and operation-team tuning
+    trees/                     One behavior tree per file
+  scripts/
+    Rose_AI_Gameplay.lua       Gameplay entry script; includes the modules below
+    Rose_AI_Core.lua ...       Modules: civic grants, war strategies, naval, nuclear, war director, diagnostics
+    Rose_AI_ChoiceMarkers.lua  Choice marker buildings
+    Rose_AI_InGame.lua/.xml    UI-side readings (military strength, income, policy audit)
 ```
 
 Rose AI is under active development. Results should be evaluated across multiple games and seeds because Civ VI's AI choices remain situational and probabilistic.

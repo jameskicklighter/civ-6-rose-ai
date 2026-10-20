@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Naval Superiority Tree: replaces the base tree with a short interception of one Lua-chosen enemy ship
+(initial and ongoing recruitment of nearby existing ships only, no stealing; the Naval Pillage branch
+omitted; a Naval Patrol sibling keeps the fleet busy during the retry window). New node ids 0-14.
+Hand-written. AGENTS.md "Naval Superiority replacement".
+-->
+<GameInfo>
+
+  <BehaviorTreeNodes>
+    <Delete TreeName="Naval Superiority Tree" />
+
+    <Row NodeType="Sequence" NodeId="0" TreeName="Naval Superiority Tree" JumpTo="15" />
+      <Row NodeType="Decode Trigger" NodeId="1" TreeName="Naval Superiority Tree" />
+      <!-- Initial phase: defend, recruit, attack. -->
+      <Row NodeType="Concurrent" NodeId="2" TreeName="Naval Superiority Tree" JumpTo="6" />
+        <Row NodeType="Operation Defend Units" NodeId="3" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Recruit Units" NodeId="4" TreeName="Naval Superiority Tree" />
+        <Row NodeType="Operation Attack Units" NodeId="5" TreeName="Naval Superiority Tree" />
+      <!-- Interception window (limiter 6): chase the target, or patrol when none is in sight. -->
+      <Row NodeType="Turn Limiter" NodeId="6" TreeName="Naval Superiority Tree" JumpTo="15" />
+        <Row NodeType="Concurrent" NodeId="7" TreeName="Naval Superiority Tree" JumpTo="15" />
+          <Row NodeType="Recruit Units" NodeId="8" TreeName="Naval Superiority Tree" />
+          <Row NodeType="Operation Defend Units" NodeId="9" TreeName="Naval Superiority Tree" />
+          <Row NodeType="Naval Choose Target" NodeId="10" TreeName="Naval Superiority Tree" JumpTo="14" />
+            <Row NodeType="Concurrent" NodeId="11" TreeName="Naval Superiority Tree" JumpTo="14" />
+              <Row NodeType="Operation Move" NodeId="12" TreeName="Naval Superiority Tree" />
+              <Row NodeType="Operation Attack Units" NodeId="13" TreeName="Naval Superiority Tree" />
+          <Row NodeType="Naval Patrol" NodeId="14" TreeName="Naval Superiority Tree" />
+  </BehaviorTreeNodes>
+
+  <TreeData>
+    <Delete TreeName="Naval Superiority Tree" />
+
+    <!-- Decode Trigger 1 (base data). -->
+    <Row DefnId="0" NodeId="1" TreeName="Naval Superiority Tree" Tag="Unused" />
+    <Row DefnId="1" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="2" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="3" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="4" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="5" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="6" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="7" NodeId="1" TreeName="Naval Superiority Tree" />
+    <Row DefnId="8" NodeId="1" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <!-- Initial phase: Recruit Units 4 is the initial phase (DefnId 0 false), existing ships only (3), no stealing (6). -->
+    <Row DefnId="0" NodeId="3" TreeName="Naval Superiority Tree" DefaultData="35" />
+    <Row DefnId="0" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="3" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="4" NodeId="4" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="5" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="6" NodeId="4" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="5" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <!--
+    Limiter 6: 8 turns with Limit Is Min (2), so the window runs in full, and no Fail at Limit (1);
+    Concurrent 7 tolerates one failed child (Max Failures 1), normally Naval Patrol.
+    -->
+    <Row DefnId="0" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="8" />
+    <Row DefnId="1" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="6" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="0" NodeId="7" TreeName="Naval Superiority Tree" DefaultData="1" />
+    <!-- Ongoing phase: Recruit Units 8 ongoing (DefnId 0 true), existing ships only, no stealing; Choose Target 10 retries (1 false). -->
+    <Row DefnId="0" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="2" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="3" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="4" NodeId="8" TreeName="Naval Superiority Tree" Tag="Present Value" />
+    <Row DefnId="5" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="6" />
+    <Row DefnId="6" NodeId="8" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="9" TreeName="Naval Superiority Tree" DefaultData="35" />
+    <Row DefnId="0" NodeId="10" TreeName="Naval Superiority Tree" DefaultData="DOMAIN_SEA" />
+    <Row DefnId="1" NodeId="10" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="0" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="1" />
+    <Row DefnId="1" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="3" />
+    <Row DefnId="2" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="12" TreeName="Naval Superiority Tree" DefaultData="3" />
+    <Row DefnId="0" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="true" />
+    <Row DefnId="1" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="2" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="false" />
+    <Row DefnId="3" NodeId="13" TreeName="Naval Superiority Tree" DefaultData="false" />
+  </TreeData>
+
+</GameInfo>

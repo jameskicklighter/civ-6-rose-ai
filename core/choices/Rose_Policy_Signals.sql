@@ -1,14 +1,16 @@
 -- ============================================================================
--- Rose AI: Inactive policy, government, and belief choice signals
+-- Rose AI: policy and government entries of the inactive choice-signal
+-- registry (Rose_Belief_Signals.sql), then every registered signal's
+-- requirements, modifier and attachment. The AI choice scorer reads only
+-- SubjectRequirementSetId and only its registered requirement types; the
+-- impossible owner gates keep every signal inactive in gameplay.
+-- AGENTS.md "### choices/Rose_Policy_Signals.sql", "AI scorer requirement rule".
 -- ============================================================================
--- Matching-yield signals use direct CITY subject checks supported by the AI.
--- Their impossible PLAYER owner gate prevents any actual yield. Serfdom and
--- Public Works retain one player-scoped envoy signal each, not one per city.
--- Government envoy signals and their unverified owner eligibility are unchanged.
 
--- Each component adds +3 of its yield per qualifying city. Combined cards use
--- independent components: either qualifying district contributes, and both
--- contribute when both qualify (including when they are in different cities).
+-- Adjacency cards: +3 of the card's yield per city with a high-adjacency
+-- district; combined cards get independent components (either district counts,
+-- both add up); Serfdom and Public Works one player envoy signal each;
+-- AGENTS.md "Adjacency cards", "Inclusive OR replacements", "Serfdom/Public Works"
 WITH ChoiceSources (BiasId, SourceType, Amount, GateType, YieldType) AS (VALUES
 ('ROSE_CHOICE_POLICY_NATURAL_PHILOSOPHY', 'POLICY_NATURAL_PHILOSOPHY', 3, 'ADJACENCY', 'YIELD_SCIENCE'),
 ('ROSE_CHOICE_POLICY_SCRIPTURE', 'POLICY_SCRIPTURE', 3, 'ADJACENCY', 'YIELD_FAITH'),
@@ -28,9 +30,10 @@ SELECT b.BiasId, 'POLICY', b.SourceType, b.Amount, b.GateType, b.YieldType
 FROM ChoiceSources b
 JOIN Policies source ON source.PolicyType = b.SourceType;
 
+-- Government envoy signals: Theocracy for religion founders, Monarchy and
+-- Merchant Republic for the others, tier 3 generic and leader-specific, tier 4;
+-- the owner conditions are not proven chooser gates; AGENTS.md "Government signals unchanged"
 WITH ChoiceSources (BiasId, SourceKind, SourceType, Amount, GateType, GateValue) AS (VALUES
--- Tier 2: religion founders receive Theocracy; non-founders receive the two
--- secular alternatives.  Tier 3 has generic and leader-specific signals.
 ('ROSE_CHOICE_GOV_MONARCHY_NON_FOUNDER',
  'GOVERNMENT', 'GOVERNMENT_MONARCHY', 1, 'NON_FOUNDER', NULL),
 ('ROSE_CHOICE_GOV_MERCHANT_REPUBLIC_NON_FOUNDER',
@@ -69,11 +72,13 @@ WHERE ((b.SourceKind = 'POLICY' AND EXISTS
   AND (b.GateType <> 'LEADER_TRAIT' OR EXISTS
        (SELECT 1 FROM Traits WHERE TraitType = b.GateValue));
 
+-- Minimum adjacency of the adjacency gates; AGENTS.md "Adjacency cards"
 INSERT INTO GlobalParameters (Name, Value) VALUES
 ('ROSE_CHOICE_MIN_ADJACENCY', '3');
 
--- The mapping yield is the district adjacency to test. Unique replacements
--- share a component's TEST_ANY gate and never create duplicate yield signals.
+-- District gates of the cards (the yield is the adjacency to test), then
+-- resolved to the district and its unique replacements, which share one
+-- TEST_ANY gate; AGENTS.md "Adjacency cards"
 WITH DistrictGates (BiasId, DistrictType, YieldType) AS (VALUES
 ('ROSE_CHOICE_POLICY_NATURAL_PHILOSOPHY', 'DISTRICT_CAMPUS', 'YIELD_SCIENCE'),
 ('ROSE_CHOICE_POLICY_SCRIPTURE', 'DISTRICT_HOLY_SITE', 'YIELD_FAITH'),
@@ -99,6 +104,8 @@ FROM RoseChoiceDistricts gate
 JOIN DistrictReplaces replacement ON replacement.ReplacesDistrictType = gate.DistrictType
 JOIN Districts d ON d.DistrictType = replacement.CivUniqueDistrictType;
 
+-- City subject gates: any qualifying district (TEST_ANY), each a high-adjacency
+-- or presence requirement; AGENTS.md "Adjacency cards", "Follower-belief yield signals"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType)
 SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'REQUIREMENTSET_TEST_ANY'
 FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE');
@@ -130,6 +137,9 @@ SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId,
        'ROSE_CHOICE_REQ_DISTRICT_' || BiasId || '_' || DistrictType
 FROM RoseChoiceResolvedDistricts;
 
+-- Marker gates of the two envoy beliefs: the marker AND the Palace in the
+-- same city (eligibility from the marker, one city from the Palace);
+-- AGENTS.md "Crusade", "Defender of the Faith"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType)
 SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'REQUIREMENTSET_TEST_ALL'
 FROM RoseChoiceBiases WHERE GateType IN ('MILITARY_MARKER', 'WAR_MARKER');
@@ -141,8 +151,6 @@ INSERT INTO RequirementArguments (RequirementId, Name, Value) VALUES
 ('ROSE_CHOICE_REQ_MILITARY_MARKER', 'BuildingType', 'BUILDING_ROSE_MILITARY_CHOICE_MARKER'),
 ('ROSE_CHOICE_REQ_WAR_MARKER', 'BuildingType', 'BUILDING_ROSE_WAR_CHOICE_MARKER'),
 ('ROSE_CHOICE_REQ_PALACE', 'BuildingType', 'BUILDING_PALACE');
--- Both buildings must be in this city: the marker carries military or wartime eligibility,
--- while the Palace limits the signal to one city instead of scaling by empire.
 INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId)
 SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId,
        CASE WHEN GateType = 'MILITARY_MARKER' THEN 'ROSE_CHOICE_REQ_MILITARY_MARKER'
@@ -152,9 +160,8 @@ UNION ALL
 SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'ROSE_CHOICE_REQ_PALACE'
 FROM RoseChoiceBiases WHERE GateType IN ('MILITARY_MARKER', 'WAR_MARKER');
 
--- Existing government owner eligibility is preserved. It is NOT established as
--- a chooser gate: the traced scorer skips owner requirements. No policy or
--- belief relies on these conditions for district eligibility.
+-- Government owner eligibility (founder, non-founder, leader trait), kept
+-- although the scorer skips owner requirements; AGENTS.md "Government signals unchanged"
 INSERT INTO Requirements (RequirementId, RequirementType, Inverse)
 SELECT 'ROSE_CHOICE_REQ_GATE_' || BiasId, 'REQUIREMENT_PLAYER_IS_RELIGION_FOUNDER',
        CASE WHEN GateType = 'FOUNDER' THEN 0 ELSE 1 END
@@ -168,6 +175,9 @@ INSERT INTO RequirementArguments (RequirementId, Name, Value)
 SELECT 'ROSE_CHOICE_REQ_GATE_' || BiasId, 'TraitType', GateValue
 FROM RoseChoiceBiases WHERE GateType = 'LEADER_TRAIT';
 
+-- Owner sets: AI only, the eligibility above, and for yield and city envoy
+-- signals both having and lacking Future Civic (TEST_ALL: no player passes);
+-- AGENTS.md "Inactive preference signals"
 INSERT INTO Requirements (RequirementId, RequirementType, Inverse) VALUES
 ('ROSE_CHOICE_REQ_AI', 'REQUIREMENT_PLAYER_IS_HUMAN', 1),
 ('ROSE_CHOICE_HAS_FUTURE_CIVIC', 'REQUIREMENT_PLAYER_HAS_CIVIC', 0),
@@ -192,15 +202,17 @@ UNION ALL
 SELECT 'ROSE_CHOICE_OWNER_' || BiasId, 'ROSE_CHOICE_LACKS_FUTURE_CIVIC'
 FROM RoseChoiceBiases WHERE YieldType IS NOT NULL OR GateType IN ('MILITARY_MARKER', 'WAR_MARKER');
 
--- TEST_ALL requires BOTH having and lacking Future Civic. No player can pass.
--- Yield signals and city envoy signals place this contradiction on their owner, leaving
--- city subject checks visible. Other envoy signals retain it on subjects.
+-- The same contradiction as a subject set for the other envoy signals, whose
+-- impossible gate sits on the subject (PLAYER_HAS_CIVIC is unregistered in the
+-- scorer, so it still scores them); AGENTS.md "Government signals unchanged"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType) VALUES
 ('ROSE_CHOICE_NEVER_ACTIVE', 'REQUIREMENTSET_TEST_ALL');
 INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId) VALUES
 ('ROSE_CHOICE_NEVER_ACTIVE', 'ROSE_CHOICE_HAS_FUTURE_CIVIC'),
 ('ROSE_CHOICE_NEVER_ACTIVE', 'ROSE_CHOICE_LACKS_FUTURE_CIVIC');
 
+-- One modifier per signal with its arguments, attached to its policy,
+-- government or belief; AGENTS.md "Inactive choice registry"
 INSERT INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId, SubjectRequirementSetId)
 SELECT BiasId,
        CASE WHEN GateType IN ('MILITARY_MARKER', 'WAR_MARKER') THEN 'MODIFIER_ROSE_CITIES_INACTIVE_ENVOY'

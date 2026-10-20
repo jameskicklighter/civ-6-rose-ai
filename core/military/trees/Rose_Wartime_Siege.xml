@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Rose Wartime Siege: a new operation on Rose's Siege City Assault tree (Siege_City_Assault.xml),
+started only by the war director in the gameplay scripts, which also adds the army.
+AGENTS.md "Rose Wartime Siege operation and the engine's wartime assaults off",
+'Known engine behaviour: scripted operations'.
+-->
+<GameInfo>
+
+  <!--
+  Wartime Attack Walled City as Rose sets it, with TargetParameter 1 (the target stays valid walled or
+  not), reach 0 (meant to leave no backup city, so it ends at the capture), a fixed rally plot
+  (AllowTargetUpdate false) and Priority 4, the ceiling, so planned sieges cannot take its units.
+  -->
+  <AiOperationDefs>
+    <Row OperationName="Rose Wartime Siege" TargetType="TARGET_ENEMY_COMBAT_DISTRICT" TargetParameter="1"
+      EnemyType="WAR" BehaviorTree="Siege City Assault" Priority="4"
+      MaxTargetDistInRegion="0" MaxTargetDistInArea="0" MaxTargetDistInWorld="0"
+      MinOddsOfSuccess="0.3" SelfStart="false" MustBeAtWar="true" MustHaveUnits="6"
+      OperationType="ROSE_WARTIME_ASSAULT" AllowTargetUpdate="false" />
+  </AiOperationDefs>
+  <AiTeams>
+    <Row TeamName="Rose Siege Force" />
+  </AiTeams>
+  <!-- The wartime walled strength ratios and the base coastal naval team. -->
+  <AiOperationTeams>
+    <Row TeamName="Rose Siege Force" OperationName="Rose Wartime Siege"
+      InitialStrengthAdvantage="0.6" OngoingStrengthAdvantage="1.0" />
+    <Row TeamName="City Naval Attack Force" OperationName="Rose Wartime Siege"
+      InitialStrengthAdvantage="-5" OngoingStrengthAdvantage="3" Condition="IsCoastalTarget" />
+  </AiOperationTeams>
+  <!--
+  The City Attack Force rows as Rose sets them, with two wall-breakers. A scripted start is ready at
+  once, so these minimums do not gate the operation; they may shape what the later Recruit nodes add.
+  -->
+  <OpTeamRequirements>
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_ROSE_CONTRACT_COMBAT" MinNumber="5" MaxNumber="16" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_ROSE_CONTRACT_MELEE" MinNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_RANGED" MinNumber="1" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_ROSE_SIEGE_STRIKE" MinNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="3" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_SIEGE_SUPPORT" AiTypeDependence="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="2" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_SIEGE_ALL" MinNumber="0" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_CIVILIAN_LEADER" MaxNumber="1" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_CIVILIAN" MaxNumber="0" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_AIR" MaxNumber="0" />
+    <Row TeamName="Rose Siege Force" AiType="UNITTYPE_NAVAL" MaxNumber="0" />
+  </OpTeamRequirements>
+  <AllowedOperations>
+    <Row ListType="Default_List" OperationDef="Rose Wartime Siege" />
+  </AllowedOperations>
+
+</GameInfo>

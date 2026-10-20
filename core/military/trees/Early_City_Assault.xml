@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Early City Assault (unwalled cities, any era): base tree kept, two TreeData values tuned in place.
+Base node ids. AGENTS.md "Siege/Early City Assault tuning".
+-->
+<GameInfo>
+
+  <TreeData>
+    <!-- Limiter 16: 13 (base 15); unflagged limiters fail at about half, so about 6 turns. -->
+    <Update>
+      <Where DefnId="0" NodeId="16" TreeName="Early City Assault" />
+      <Set DefaultData="13" />
+    </Update>
+    <!-- Pre-war limiter 26 (Limit Is Min): 7, so the five-turn diplomacy contract gets its count-six tick. -->
+    <Update>
+      <Where DefnId="0" NodeId="26" TreeName="Early City Assault" />
+      <Set DefaultData="7" />
+    </Update>
+  </TreeData>
+
+</GameInfo>

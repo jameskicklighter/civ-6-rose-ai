@@ -1,38 +1,43 @@
 -- ============================================================================
--- Rose AI: derived unit AI roles, city-assault team rows, the wartime
+-- Rose AI: derived unit AI roles, operation team rows, the wartime
 -- operation type and operation slot limits. Loads before the military XML,
 -- which uses UNITTYPE_ROSE_* and ROSE_WARTIME_ASSAULT.
 -- AGENTS.md "### military/ (Rose_Operation_Roles.sql, Operations.xml, trees/)", 'Known engine behaviour: operation recruitment and slots'.
 -- ============================================================================
 
--- The three derived roles are rebuilt from scratch.
+-- The four derived roles are rebuilt from scratch.
 DELETE FROM OpTeamRequirements
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
     'UNITTYPE_ROSE_CONTRACT_MELEE',
+    'UNITTYPE_ROSE_CONTRACT_EXPLORE',
     'UNITTYPE_ROSE_SIEGE_STRIKE'
 );
 DELETE FROM UnitAiInfos
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
     'UNITTYPE_ROSE_CONTRACT_MELEE',
+    'UNITTYPE_ROSE_CONTRACT_EXPLORE',
     'UNITTYPE_ROSE_SIEGE_STRIKE'
 );
 DELETE FROM UnitAiTypes
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
     'UNITTYPE_ROSE_CONTRACT_MELEE',
+    'UNITTYPE_ROSE_CONTRACT_EXPLORE',
     'UNITTYPE_ROSE_SIEGE_STRIKE'
 );
 
 INSERT OR IGNORE INTO UnitAiTypes (AiType) VALUES
 ('UNITTYPE_ROSE_CONTRACT_COMBAT'),
 ('UNITTYPE_ROSE_CONTRACT_MELEE'),
+('UNITTYPE_ROSE_CONTRACT_EXPLORE'),
 ('UNITTYPE_ROSE_SIEGE_STRIKE');
 
--- Trainable combat and melee roles without faith-only units, so city assaults
--- stop contracting Warrior Monks (owned ones keep their native roles);
--- AGENTS.md "City-assault production-contract roles"
+-- Trainable land combat, melee and explore roles without faith-only units, so
+-- operation teams stop contracting Warrior Monks, which no city can train
+-- (owned ones keep their native roles);
+-- AGENTS.md "Production-contract roles without Warrior Monks"
 INSERT OR IGNORE INTO UnitAiInfos (UnitType, AiType)
 SELECT DISTINCT Info.UnitType, 'UNITTYPE_ROSE_CONTRACT_COMBAT'
 FROM UnitAiInfos AS Info
@@ -55,6 +60,17 @@ WHERE Info.AiType = 'UNITTYPE_MELEE'
   AND Unit.EnabledByReligion = 0
   AND Unit.UnitType <> 'UNIT_WARRIOR_MONK';
 
+INSERT OR IGNORE INTO UnitAiInfos (UnitType, AiType)
+SELECT DISTINCT Info.UnitType, 'UNITTYPE_ROSE_CONTRACT_EXPLORE'
+FROM UnitAiInfos AS Info
+JOIN Units AS Unit ON Unit.UnitType = Info.UnitType
+WHERE Info.AiType = 'UNITAI_EXPLORE'
+  AND Unit.FormationClass = 'FORMATION_CLASS_LAND_COMBAT'
+  AND Unit.CanTrain = 1
+  AND Unit.MustPurchase = 0
+  AND Unit.EnabledByReligion = 0
+  AND Unit.UnitType <> 'UNIT_WARRIOR_MONK';
+
 -- Wall-breaker role: trainable ground siege units and bombers, the walled
 -- assault's mandatory minimum (bombers stay out of UNITTYPE_SIEGE, so other
 -- teams keep their pools); AGENTS.md "Walled-city siege composition"
@@ -67,18 +83,25 @@ WHERE Info.AiType IN ('UNITTYPE_SIEGE', 'UNITTYPE_AIR_SIEGE')
   AND Unit.MustPurchase = 0
   AND Unit.EnabledByReligion = 0;
 
--- City-assault teams recruit through the derived roles;
--- AGENTS.md "City-assault production-contract roles"
+-- City-assault, barbarian-camp, City Defense and settle-escort teams recruit
+-- through the derived roles, with their base numbers (Operations.xml caps
+-- City Defense and the escort); AGENTS.md "Production-contract roles without Warrior Monks"
 DELETE FROM OpTeamRequirements
-WHERE TeamName IN ('Simple City Attack Force', 'City Attack Force')
-  AND AiType IN ('UNITAI_COMBAT', 'UNITTYPE_MELEE');
+WHERE TeamName IN ('Simple City Attack Force', 'City Attack Force',
+                   'Simple Early Attack Force', 'City Defense', 'Settle City Team')
+  AND AiType IN ('UNITAI_COMBAT', 'UNITTYPE_MELEE', 'UNITAI_EXPLORE');
 
 INSERT OR REPLACE INTO OpTeamRequirements
     (TeamName, AiType, MinNumber, MaxNumber) VALUES
-('Simple City Attack Force', 'UNITTYPE_ROSE_CONTRACT_COMBAT', 5, 16),
-('Simple City Attack Force', 'UNITTYPE_ROSE_CONTRACT_MELEE',  2, NULL),
-('City Attack Force',        'UNITTYPE_ROSE_CONTRACT_COMBAT', 5, 16),
-('City Attack Force',        'UNITTYPE_ROSE_CONTRACT_MELEE',  2, NULL);
+('Simple City Attack Force',  'UNITTYPE_ROSE_CONTRACT_COMBAT',  5, 16),
+('Simple City Attack Force',  'UNITTYPE_ROSE_CONTRACT_MELEE',   2, NULL),
+('City Attack Force',         'UNITTYPE_ROSE_CONTRACT_COMBAT',  5, 16),
+('City Attack Force',         'UNITTYPE_ROSE_CONTRACT_MELEE',   2, NULL),
+('Simple Early Attack Force', 'UNITTYPE_ROSE_CONTRACT_COMBAT',  1, 10),
+('Simple Early Attack Force', 'UNITTYPE_ROSE_CONTRACT_MELEE',   1, NULL),
+('City Defense',              'UNITTYPE_ROSE_CONTRACT_COMBAT',  0, NULL),
+('City Defense',              'UNITTYPE_ROSE_CONTRACT_EXPLORE', 0, NULL),
+('Settle City Team',          'UNITTYPE_ROSE_CONTRACT_COMBAT',  1, NULL);
 
 -- Military Victory adds one CITY_ASSAULT slot instead of two;
 -- AGENTS.md "City-assault concentration"

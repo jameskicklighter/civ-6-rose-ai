@@ -65,19 +65,19 @@ AGENTS.md "### military/ (Rose_Operation_Roles.sql, Operations.xml, trees/)".
       <Set MinNumber="0" MaxNumber="2" />
     </Update>
 
-    <!-- City Defense takes no bombard units and at most three combat units; AGENTS.md "City-defense siege reservation", "City Defense cap". -->
+    <!-- City Defense takes no bombard units and at most three combat units (the trainable combat role from Rose_Operation_Roles.sql); AGENTS.md "City-defense siege reservation", "City Defense cap". -->
     <Replace TeamName="City Defense" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />
     <Update>
-      <Where TeamName="City Defense" AiType="UNITAI_COMBAT" />
+      <Where TeamName="City Defense" AiType="UNITTYPE_ROSE_CONTRACT_COMBAT" />
       <Set MaxNumber="3" />
     </Update>
 
     <!-- Camp attacks take no bombers (ground movement only); AGENTS.md "Simple Operation Attack (barbarian camps)". -->
     <Replace TeamName="Simple Early Attack Force" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
 
-    <!-- One or two combat escorts, no siege or air units; AGENTS.md "Settlement operation concurrency". -->
+    <!-- One or two combat escorts (the trainable combat role), no siege or air units; AGENTS.md "Settlement operation concurrency". -->
     <Update>
-      <Where TeamName="Settle City Team" AiType="UNITAI_COMBAT" />
+      <Where TeamName="Settle City Team" AiType="UNITTYPE_ROSE_CONTRACT_COMBAT" />
       <Set MinNumber="1" MaxNumber="2" />
     </Update>
     <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE" MinNumber="0" MaxNumber="0" />

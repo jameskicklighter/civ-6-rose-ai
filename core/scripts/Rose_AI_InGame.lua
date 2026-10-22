@@ -15,7 +15,7 @@ local RoseAI = ExposedMembers.RoseAI;
 -- Per-turn diagnostic output (policy decks, slot lines, audit class changes).
 -- Off for release; the standalone Rose Policy Audit (DIAG) mod is the test
 -- instrument. Errors always print.
-local ROSE_VERBOSE_LOGS = true;
+local ROSE_VERBOSE_LOGS = false;
 
 function RoseGetMilitaryStrength(iPlayerID)
 	local pPlayer = Players[iPlayerID];

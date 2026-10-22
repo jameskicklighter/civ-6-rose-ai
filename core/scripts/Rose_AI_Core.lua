@@ -9,7 +9,7 @@
 
 -- Per-turn diagnostic output; off for release. Errors, grants, strategy and
 -- austerity changes and policy repairs always print.
-local ROSE_VERBOSE_LOGS = true;
+local ROSE_VERBOSE_LOGS = false;
 
 -- ============================================================================
 -- Players and units

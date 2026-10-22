@@ -7,21 +7,33 @@
 -- AGENTS.md "### choices/Rose_Policy_Signals.sql", "AI scorer requirement rule".
 -- ============================================================================
 
--- Adjacency cards: +3 of the card's yield per city with a high-adjacency
--- district; combined cards get independent components (either district counts,
--- both add up); Serfdom and Public Works one player envoy signal each;
--- AGENTS.md "Adjacency cards", "Inclusive OR replacements", "Serfdom/Public Works"
+-- Adjacency cards: +5 of the card's yield per point of the district's
+-- adjacency yield in each city, up to 10 points, as ten +5 tiers (adjacency
+-- 1 or more, 2 or more, ... 10 or more; the tier is GateValue); combined
+-- cards get tiers per district (both add up);
+-- AGENTS.md "Adjacency cards", "Inclusive OR replacements"
+WITH AdjacencyCards (CardId, SourceType, YieldType) AS (VALUES
+('ROSE_CHOICE_POLICY_NATURAL_PHILOSOPHY', 'POLICY_NATURAL_PHILOSOPHY', 'YIELD_SCIENCE'),
+('ROSE_CHOICE_POLICY_SCRIPTURE', 'POLICY_SCRIPTURE', 'YIELD_FAITH'),
+('ROSE_CHOICE_POLICY_AESTHETICS', 'POLICY_AESTHETICS', 'YIELD_CULTURE'),
+('ROSE_CHOICE_POLICY_TOWN_CHARTERS', 'POLICY_TOWN_CHARTERS', 'YIELD_GOLD'),
+('ROSE_CHOICE_POLICY_NAVAL_INFRASTRUCTURE', 'POLICY_NAVAL_INFRASTRUCTURE', 'YIELD_GOLD'),
+('ROSE_CHOICE_POLICY_CRAFTSMEN', 'POLICY_CRAFTSMEN', 'YIELD_PRODUCTION'),
+('ROSE_CHOICE_POLICY_FIVE_YEAR_PLAN_SCIENCE', 'POLICY_FIVE_YEAR_PLAN', 'YIELD_SCIENCE'),
+('ROSE_CHOICE_POLICY_FIVE_YEAR_PLAN_PRODUCTION', 'POLICY_FIVE_YEAR_PLAN', 'YIELD_PRODUCTION'),
+('ROSE_CHOICE_POLICY_ECONOMIC_UNION_COMMERCIAL', 'POLICY_ECONOMIC_UNION', 'YIELD_GOLD'),
+('ROSE_CHOICE_POLICY_ECONOMIC_UNION_HARBOR', 'POLICY_ECONOMIC_UNION', 'YIELD_GOLD')
+),
+Tiers (Tier) AS (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10))
+INSERT INTO RoseChoiceBiases (BiasId, SourceKind, SourceType, Amount, GateType, GateValue, YieldType)
+SELECT c.CardId || '_ADJ' || t.Tier, 'POLICY', c.SourceType, 5, 'ADJACENCY', t.Tier, c.YieldType
+FROM AdjacencyCards c
+CROSS JOIN Tiers t
+JOIN Policies source ON source.PolicyType = c.SourceType;
+
+-- Serfdom and Public Works: one player envoy signal each;
+-- AGENTS.md "Serfdom/Public Works"
 WITH ChoiceSources (BiasId, SourceType, Amount, GateType, YieldType) AS (VALUES
-('ROSE_CHOICE_POLICY_NATURAL_PHILOSOPHY', 'POLICY_NATURAL_PHILOSOPHY', 3, 'ADJACENCY', 'YIELD_SCIENCE'),
-('ROSE_CHOICE_POLICY_SCRIPTURE', 'POLICY_SCRIPTURE', 3, 'ADJACENCY', 'YIELD_FAITH'),
-('ROSE_CHOICE_POLICY_GRAND_OPERA', 'POLICY_GRAND_OPERA', 3, 'ADJACENCY', 'YIELD_CULTURE'),
-('ROSE_CHOICE_POLICY_TOWN_CHARTERS', 'POLICY_TOWN_CHARTERS', 3, 'ADJACENCY', 'YIELD_GOLD'),
-('ROSE_CHOICE_POLICY_NAVAL_INFRASTRUCTURE', 'POLICY_NAVAL_INFRASTRUCTURE', 3, 'ADJACENCY', 'YIELD_GOLD'),
-('ROSE_CHOICE_POLICY_CRAFTSMEN', 'POLICY_CRAFTSMEN', 3, 'ADJACENCY', 'YIELD_PRODUCTION'),
-('ROSE_CHOICE_POLICY_FIVE_YEAR_PLAN_SCIENCE', 'POLICY_FIVE_YEAR_PLAN', 3, 'ADJACENCY', 'YIELD_SCIENCE'),
-('ROSE_CHOICE_POLICY_FIVE_YEAR_PLAN_PRODUCTION', 'POLICY_FIVE_YEAR_PLAN', 3, 'ADJACENCY', 'YIELD_PRODUCTION'),
-('ROSE_CHOICE_POLICY_ECONOMIC_UNION_COMMERCIAL', 'POLICY_ECONOMIC_UNION', 3, 'ADJACENCY', 'YIELD_GOLD'),
-('ROSE_CHOICE_POLICY_ECONOMIC_UNION_HARBOR', 'POLICY_ECONOMIC_UNION', 3, 'ADJACENCY', 'YIELD_GOLD'),
 ('ROSE_CHOICE_POLICY_SERFDOM', 'POLICY_SERFDOM', 1, 'ALWAYS', NULL),
 ('ROSE_CHOICE_POLICY_PUBLIC_WORKS', 'POLICY_PUBLIC_WORKS', 1, 'ALWAYS', NULL)
 )
@@ -72,17 +84,18 @@ WHERE ((b.SourceKind = 'POLICY' AND EXISTS
   AND (b.GateType <> 'LEADER_TRAIT' OR EXISTS
        (SELECT 1 FROM Traits WHERE TraitType = b.GateValue));
 
--- Minimum adjacency of the adjacency gates; AGENTS.md "Adjacency cards"
+-- Minimum adjacency of an adjacency gate without a tier of its own (Work
+-- Ethic); AGENTS.md "Follower-belief yield signals"
 INSERT INTO GlobalParameters (Name, Value) VALUES
 ('ROSE_CHOICE_MIN_ADJACENCY', '3');
 
--- District gates of the cards (the yield is the adjacency to test), then
--- resolved to the district and its unique replacements, which share one
--- TEST_ANY gate; AGENTS.md "Adjacency cards"
-WITH DistrictGates (BiasId, DistrictType, YieldType) AS (VALUES
+-- District gates of the cards (the yield is the adjacency to test), one per
+-- tier, then resolved to the district and its unique replacements, which
+-- share one TEST_ANY gate; AGENTS.md "Adjacency cards"
+WITH DistrictGates (CardId, DistrictType, YieldType) AS (VALUES
 ('ROSE_CHOICE_POLICY_NATURAL_PHILOSOPHY', 'DISTRICT_CAMPUS', 'YIELD_SCIENCE'),
 ('ROSE_CHOICE_POLICY_SCRIPTURE', 'DISTRICT_HOLY_SITE', 'YIELD_FAITH'),
-('ROSE_CHOICE_POLICY_GRAND_OPERA', 'DISTRICT_THEATER', 'YIELD_CULTURE'),
+('ROSE_CHOICE_POLICY_AESTHETICS', 'DISTRICT_THEATER', 'YIELD_CULTURE'),
 ('ROSE_CHOICE_POLICY_TOWN_CHARTERS', 'DISTRICT_COMMERCIAL_HUB', 'YIELD_GOLD'),
 ('ROSE_CHOICE_POLICY_NAVAL_INFRASTRUCTURE', 'DISTRICT_HARBOR', 'YIELD_GOLD'),
 ('ROSE_CHOICE_POLICY_CRAFTSMEN', 'DISTRICT_INDUSTRIAL_ZONE', 'YIELD_PRODUCTION'),
@@ -92,8 +105,8 @@ WITH DistrictGates (BiasId, DistrictType, YieldType) AS (VALUES
 ('ROSE_CHOICE_POLICY_ECONOMIC_UNION_HARBOR', 'DISTRICT_HARBOR', 'YIELD_GOLD')
 )
 INSERT INTO RoseChoiceDistricts (BiasId, DistrictType, YieldType)
-SELECT d.* FROM DistrictGates d
-JOIN RoseChoiceBiases b ON b.BiasId = d.BiasId;
+SELECT b.BiasId, d.DistrictType, d.YieldType FROM DistrictGates d
+JOIN RoseChoiceBiases b ON b.BiasId = d.CardId || '_ADJ' || b.GateValue;
 
 INSERT INTO RoseChoiceResolvedDistricts (BiasId, DistrictType, YieldType)
 SELECT gate.* FROM RoseChoiceDistricts gate
@@ -128,7 +141,8 @@ FROM RoseChoiceResolvedDistricts gate
 JOIN RoseChoiceBiases b ON b.BiasId = gate.BiasId WHERE b.GateType = 'ADJACENCY'
 UNION ALL
 SELECT 'ROSE_CHOICE_REQ_DISTRICT_' || gate.BiasId || '_' || gate.DistrictType,
-       'Amount', (SELECT Value FROM GlobalParameters WHERE Name = 'ROSE_CHOICE_MIN_ADJACENCY')
+       'Amount', COALESCE(b.GateValue,
+           (SELECT Value FROM GlobalParameters WHERE Name = 'ROSE_CHOICE_MIN_ADJACENCY'))
 FROM RoseChoiceResolvedDistricts gate
 JOIN RoseChoiceBiases b ON b.BiasId = gate.BiasId WHERE b.GateType = 'ADJACENCY';
 

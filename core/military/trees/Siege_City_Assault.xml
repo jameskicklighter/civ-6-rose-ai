@@ -192,11 +192,11 @@ AGENTS.md "Siege City Assault replacement (assembly limit)", "Siege/Early City A
     <Row DefnId="1" NodeId="44" TreeName="Siege City Assault" DefaultData="2" />
     <Row DefnId="2" NodeId="44" TreeName="Siege City Assault" DefaultData="false" />
     <Row DefnId="3" NodeId="44" TreeName="Siege City Assault" DefaultData="2" />
-    <!-- Final assault: limiter 45 Turns to Run 40, Fail at Limit; Change Target 47 Backup -100 (no WEAK swap) and Failure -1 (TOO WEAK exit); Recruit 48 range 12, no stealing; Attack Units 53 Attack Nearby false. -->
+    <!-- Final assault: limiter 45 Turns to Run 40, Fail at Limit; Change Target 47 Backup -100 (no WEAK swap) and base Failure -8 (a sentinel: no TOO WEAK exit); Recruit 48 range 12, no stealing; Attack Units 53 Attack Nearby false. -->
     <Row DefnId="0" NodeId="45" TreeName="Siege City Assault" DefaultData="40" />
     <Row DefnId="1" NodeId="45" TreeName="Siege City Assault" DefaultData="true" />
     <Row DefnId="0" NodeId="47" TreeName="Siege City Assault" DefaultData="-100" />
-    <Row DefnId="1" NodeId="47" TreeName="Siege City Assault" DefaultData="-1" />
+    <Row DefnId="1" NodeId="47" TreeName="Siege City Assault" DefaultData="-8" />
     <Row DefnId="0" NodeId="48" TreeName="Siege City Assault" DefaultData="true" />
     <Row DefnId="2" NodeId="48" TreeName="Siege City Assault" DefaultData="12" />
     <Row DefnId="4" NodeId="48" TreeName="Siege City Assault" Tag="Present Value" />

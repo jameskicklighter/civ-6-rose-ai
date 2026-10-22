@@ -1,209 +1,129 @@
 # Rose AI
 
-Rose AI is a standalone Civilization VI AI overhaul. It pushes major-civilization AI toward stronger economic development, timely government upgrades, more deliberate religious and leader-specific choices, and military operations that recover and concentrate more reliably.
+Rose AI is a standalone Civilization VI AI overhaul for major civilizations. It pushes the AI toward stronger early growth and economy, timely government upgrades, more deliberate religious and leader-specific choices, and wars fought with one concentrated army at a time.
 
-This is not a map or starting-position mod. It is independent from the separate Rose Better Starts mod, and the two may be enabled together.
+It is not a map or start-position mod. The separate Rose Better Starts mod can be enabled with it.
 
 ## Requirements
 
-- Civilization VI for PC with the Gathering Storm ruleset is expected.
-- The current leader tuning references content from Rise and Fall, New Frontier Pass, and Leader Pass. A complete official DLC installation is recommended.
-- Every participant in a multiplayer game should use the same Rose AI version and the same enabled DLC and gameplay mods.
-
-The manifest declares multiplayer support, but multiplayer behavior still depends on every participant loading identical data and scripts.
+- Civilization VI for PC with the Gathering Storm ruleset.
+- Leader tuning covers Rise and Fall, New Frontier Pass and Leader Pass content; a complete official DLC installation is recommended.
+- In multiplayer, every participant needs the same Rose AI version and the same DLC and gameplay mods. Some war, economy and policy-card checks read values through an InGame UI bridge on each machine; identical game state should give identical readings, but this is not fully tested in multiplayer.
 
 ## What Rose AI changes
 
+Most changes are AI preference weights: they make an option more or less attractive but do not force a build order. AI operation limits and team sizes are likewise requests to the Civ VI AI, which it occasionally exceeds.
+
 ### Economy and development
 
-- Favors Food and Production during the Ancient through Renaissance eras, with early Culture support and a reduced early Science bias.
-- Raises priorities for population, Traders, Great Merchants, Great Engineers, and Medieval districts.
-- Favors Commercial Hubs, Industrial Zones, Government Plazas, Aqueducts, and 15 explicitly supported unique districts.
-- Prioritizes Currency, Engineering (early siege units), Feudalism, Political Philosophy, and the civics that unlock Tier 2 through Tier 4 governments.
-- Favors Builders during the Medieval and Renaissance eras.
+- Food and Production weighted up from the Ancient to the Renaissance era, with some early Culture and less early Science.
+- Higher priority for population, Traders (always), Great Merchants, Great Engineers and Medieval districts.
+- Favored districts: Commercial Hubs (Ancient to Medieval), Industrial Zones (Medieval and Renaissance), Government Plazas and Aqueducts (always), 15 civilizations' unique districts (always), Campuses from the Renaissance (with Great Scientist points and Science), and Aerodromes from the Modern era (with air units).
+- Technology and civic priorities: Currency, Engineering (the first siege units), Feudalism, Political Philosophy and the civics that unlock Tier 2 to Tier 4 governments.
+- Builders favored in the Medieval and Renaissance eras.
 
-These are AI preference weights. They influence decisions but do not force a specific build order or guarantee that the AI will choose an item immediately.
+### Civics and policy cards
 
-### Government and civic progression
+- **Government civics:** once their base-game prerequisites are met, AI players are granted the Tier 2 and Tier 3 government-unlocking civics they are missing, and with Gathering Storm the Tier 4 ones after Globalization and Social Media.
+- **Skipped early civics:** after Guilds or Medieval Faires, the AI is granted any of Mysticism, Drama and Poetry, Theology, Military Tradition, Games and Recreation, and Military Training it skipped.
+- Grants come one per turn, at the start of the AI's turn, and never touch the civic the AI is researching. If an AI's civic research is stuck on a civic it already owns, Rose sets a new one in progress.
+- **Policy card repair:** the base game sometimes leaves a slotted card without its effect, mostly after a government change. Just before the AI's own civic completes (and before a granted early civic), Rose unslots those cards so the AI slots them again. It skips civics that unlock a government, gives no free policy changes, and retries a card at most three times in a row.
+- Grants and repairs apply only to AI major civilizations. The civic tree itself is unchanged.
 
-The gameplay script helps AI majors recover civic branches that the normal AI often skips:
+### War strategies
 
-- After their normal prerequisites are complete, the AI is granted the Tier 2 and Tier 3 government-unlocking civics it is missing.
-- Gathering Storm Tier 4 government civics are granted after Globalization and Social Media are complete.
-- Reaching Guilds or Medieval Faires fills six skipped early civics: Mysticism, Drama and Poetry, Theology, Military Tradition, Games and Recreation, and Military Training.
-- Grants happen at the start of the AI's turn, one civic per turn. A grant waits a turn when the AI is about to finish a civic of its own, so the AI does not rearrange its policy cards twice in one turn.
+Rose adds strategies for wars against other major civilizations, plus an austerity mode:
 
-These grants apply only to non-human major civilizations. Rose AI does not rewrite the civic tree's prerequisite relationships.
+- **At War:** more Production, Gold and army, naval units and replacements; less demand for optional districts, improvements and wonders; enemy cities valued more as targets. While it lasts, the AI starts no new wars on city-states and no planned attacks (a Military Victory AI keeps one), and is willing to use nuclear weapons.
+- **Military Recovery:** while the AI's military strength is below 70% of its combined major-civilization enemies (until it recovers to 85%), it rebuilds harder, cuts optional infrastructure further, adds City Defense capacity, favors the Grand Master's Chapel and gives up its planned attack slot.
+- **War Advantage:** while the AI is at least 125% as strong as its enemies (until it falls below 110%), it does not seek peace (it can still accept an offer) and gets a second wartime attack.
+- **Austerity:** when the AI is nearly out of Gold and losing Gold each turn, it favors Gold, Traders, Commercial Hubs and Harbors and trims part of its extra wartime unit demand until the treasury recovers. It never disbands units or cancels attacks.
 
-### Policy card repair
+The strength checks use the engine's military-strength value through the InGame UI bridge and stay off when that value is unavailable.
 
-The base game sometimes leaves a slotted policy card without its effect, most often after a government change. The card still shows as slotted but does nothing until it is moved to another slot.
+### War director
 
-- When the AI is about to finish a civic, Rose first takes any slotted cards that have lost their effect out of their slots. The AI slots its cards again when the civic completes, as it always does.
-- The same happens just before Rose grants one of the early tree-filling civics. It is skipped before a civic that unlocks a government, since government changes are when cards stop working.
-- No extra free policy changes are given. A card is retried at most three times in a row, then left alone for ten turns.
-- In testing, cards without their effect fell from about a quarter of AI card-turns to 5%.
-- Human players' cards are not touched.
+While an AI has been at war with another major civilization for three turns, Rose's script picks one enemy city at a time and sends one army to take it:
 
-### Dynamic war behavior
+- **Target:** the nearest revealed city of a major civilization it is at war with, within 12 tiles of its own cities (16 under War Advantage). City-states are never targets, and neither are cities whose defense is well above anything the AI can bombard with.
+- **Army:** 6 to 12 nearby land units, including two siege units against walls or a strong defense, plus bombers in range. The army must be close to the city and have a land route to it. Against a coastal city the siege also asks for two to five ranged warships with a range of 2 or more (the Frigate and later).
+- **Holds back** while three or more enemy units stand on the AI's land near its cities, during Military Recovery, or when no army can reach a city.
+- After a capture, the next city can follow. The AI's own wartime attack operations are switched off, so this army has the wartime slot.
 
-Rose AI adds three strategies for wars against other major civilizations, plus an austerity mode:
+### Military operations
 
-- **At War** favors Production, Gold, a larger army, naval units, and army replacement while temporarily reducing optional district, improvement, and wonder demand. It values enemy cities more as targets and stops the AI from starting new wars on city-states while it is fighting a major civilization.
-- **Military Recovery** stacks when the AI's military strength is below 70% of the combined opposing major armies. It adds defensive capacity, gives up one city-assault slot, and places a stronger emphasis on rebuilding.
-- **War Advantage** discourages voluntary peace while the AI is at least 125% as strong as the combined opposing major armies.
-- **Austerity** applies when the AI is nearly out of Gold and losing Gold each turn. It favors Gold, Traders, Commercial Hubs and Harbors, and trims part of the extra wartime unit demand, until the treasury recovers. It never disbands units or cancels attack plans.
+- **Walled-city sieges** need a unit that can damage walls: a bombard siege unit or a bomber. A siege that has not assembled after about 15 turns ends, and once the AI is already at war it skips the declaration wait. The final assault keeps attacking until the city falls or about 20 turns pass.
+- **Reach:** walled-city attacks reach 16 tiles when planned and 22 during a war, so wars reach the enemy's cities instead of nearby city-states.
+- **Army size:** aggressive military leaders keep a larger standing army in every era, at peace too. Other AIs build up when they go to war (At War above), and from the Industrial era every AI keeps a somewhat larger army. From the Renaissance, well-defended cities count as more worthwhile targets.
+- **City Defense:** at most three operations at once (five during Military Recovery), each with up to three combat units and no bombard units, so assaults keep their siege units. Defenders attack nearby enemies instead of only garrisoning.
+- **Recruitment:** operation teams ask cities only for units they can train, so the AI no longer orders faith-only Warrior Monks.
+- **Barbarian camps:** an attack ends after about 10 turns of approach or 12 turns at the camp, and camp teams take no bombers.
+- **Settlers** go out one operation at a time, with a combat escort.
+- **Naval Superiority** is a small, script-started interception of a visible enemy warship within 12 tiles, using nearby ships only.
+- A Military Victory strategy adds one planned attack slot instead of two.
 
-The strength checks use an InGame UI bridge to read the engine's military-strength value. They fail closed when that value is unavailable, so the strength-gated recovery and advantage modes are not activated from incomplete data.
+### Nuclear weapons
 
-### Military operations and behavior trees
+The base game's nuclear operation could not order or keep a delivery unit, so the AI built devices and rarely used them. Rose switches that operation off and orders strikes from its script, one launch per order:
 
-- Walled-city assaults require one unit that can damage walls: a bombard siege unit or, from the Modern era, a bomber. They may use a limited number of extra bombers.
-- City-defense operations avoid consuming bombard siege units needed by assaults. An AI runs at most three at once (five while recovering), each asking for up to three combat units. In testing, defense held about a quarter of a warring AI's army; the cap is meant to free more of it for attacks.
-- Attacks during a war have their own slots, one per war, so planned attacks on city-states can no longer take every slot while the AI is fighting a major civilization. Wartime attacks on walled cities accept slightly lower odds.
-- City-assault production contracts exclude faith-only and otherwise untrainable units, preventing impossible Warrior Monk contracts.
-- City-assault strength thresholds, recruitment ranges, phase limits, and operation concurrency are tuned to reduce premature attacks and stalled sieges.
-- A walled-city siege that has not taken its target after about 20 turns of final assault ends, so a worn-down team stops tying up units and the AI can regroup.
-- Walled-city attacks can reach farther targets (16 tiles when planned, 22 during a war), so mid- and late-game wars reach the enemy's cities instead of nearby city-states.
-- Aggressive military leaders keep a larger standing army in every era, at peace too, so they have a force ready before they declare war. Other AIs build up when they go to war (see At War above). From the Industrial era every AI keeps a somewhat larger army.
-- From the Renaissance, well-defended cities count as more worthwhile targets. The early eras are unchanged.
-- Nuclear attack operations can now get going. In the base game they never placed a production order for a Bomber (a data error), could not take one from another operation, and a team holding a Bomber still failed its strength check, so AIs built nuclear weapons and never used them. Rose fixes all three: the operation can order a Bomber, Jet Bomber or Nuclear Submarine, take one from a siege (or a Nuclear Submarine from naval city defense), and needs no strength advantage. Whether the AI then reaches the target and launches is not yet tested. The AI's own willingness check is unchanged: in testing it passed against a major civilization at war, not against a city-state.
-- Settlement operations are limited to one at a time and retain a combat escort without recruiting siege or bomber roles.
-- The Simple City Defense tree is replaced with a focused version.
-- Naval Superiority is a small, Lua-started interception against a visible enemy combat ship within 12 tiles. It uses nearby existing ships, cannot create or steal units, and keeps a patrol fallback active while the target is reacquired.
-- Barbarian-camp attack teams cannot recruit bombers that their ground-operation tree cannot use.
+- An AI holding a device and at war with a major civilization for five turns launches a Bomber, Jet Bomber or Nuclear Submarine at a revealed city of that enemy within range.
+- Never at a city-state, never where the blast could reach its own units or cities, or the cities of anyone it is not at war with, and not at the same city twice within ten turns.
+- Aggressive military leaders and Gandhi research toward nuclear weapons earlier and are always willing to use them; other AIs are willing while At War is active. Gandhi's nuclear attitude is permanent instead of a random hidden agenda.
 
-The operation limits and requested team maxima are instructions to the Civ VI AI system, not hard engine caps. The engine can occasionally exceed them.
+### Leaders
 
-### Leader, district, and diplomacy tuning
+- Curated religious and low-religion leader groups; leaders who should not spend an early district slot on religion avoid early Holy Sites and Stonehenge, while religious leaders favor early Holy Sites and Great Prophets (both Saladin versions have their own tuning).
+- Harbors for selected naval leaders, native coastal raids for original Harald, cavalry and Holy War for Basil II, and expansionist settling for Victoria and Philip II.
+- Aggressive military leaders favor formal and surprise wars, value friendships less, and favor the Grand Master's Chapel (Faith purchases of land units).
+- Preserves and Mysticism for Bull Moose Roosevelt and John Curtin, Theater Squares for Hammurabi.
 
-- Curates religious and low-religious leader traits.
-- Discourages early Holy Sites and Stonehenge for leaders that should not spend an early district slot on religion.
-- Gives religious leaders stronger early Holy Site and Great Prophet priorities, with separate treatment for both Saladin versions.
-- Adds Harbor priorities for selected naval leaders and native coastal-raiding support for original Harald.
-- Adds cavalry and Holy War preferences for Basil II.
-- Adds expansionist behavior to Victoria and Philip II.
-- Gives aggressive military leaders a stronger war preference, a moderate diplomatic-bonus penalty, and a preference for the Grand Master's Chapel, which lets them buy land units with Faith. An AI in Military Recovery also favors the Chapel.
-- Supports Preserve and Mysticism choices for Bull Moose Roosevelt and John Curtin, and Theater Squares for Hammurabi.
+### Choice signals
 
-## Explicit AI-only bonuses
+Some policy cards, beliefs and governments carry extra modifiers that the AI's choice scorer counts but that never take effect in play, so they steer picks without changing any real yield:
 
-Rose AI gives non-human players +5 combat strength against barbarians on Prince difficulty and above, plus the civic grants described earlier.
+- **Adjacency cards** (Natural Philosophy, Scripture, Aesthetics, Town Charters, Naval Infrastructure, Craftsmen, Five-Year Plan, Economic Union) score +5 of their yield per point of the matching district's adjacency in each city, up to 10 points.
+- **Follower beliefs** (Work Ethic, Jesuit Education, Choral Music, Feed the World, Zen Meditation, Religious Community) score a small yield per city with a Holy Site (Work Ethic: one with +3 adjacency or more).
+- **Crusade** scores only for aggressive military leaders and **Defender of the Faith** only while the AI is at war with another major civilization. Hidden marker buildings with no effects tell the scorer which AIs qualify.
+- Nine governments and Serfdom and Public Works carry a small envoy signal.
 
-On Prince difficulty and above, AI players also pay 35% less Gold to upgrade units, and with Gathering Storm 35% fewer strategic resources. This stacks with Professional Army.
+The native effects of these cards, beliefs and governments are unchanged.
 
-### Inactive choice bias
+## AI-only bonuses
 
-The artificial yield signals influence AI evaluation while requiring both having and lacking Future Civic for gameplay activation. They do not pay out resources. Natural Philosophy's Prince control test changed Brazil's score from 114 to 58 when its artificial Science amount changed from 3 to 0, while recorded Science matched through turn 58. Its amount is restored to 3. The expanded cards and beliefs still need their own runtime tests.
-
-Adjacency cards advertise **+3 matching yield per qualifying city**, using a direct city subject check at **at least +3 district adjacency**, including active unique district replacements:
-
-| Policy | Inactive evaluation signal |
-|---|---|
-| Natural Philosophy | +3 Science for a qualifying Campus |
-| Scripture | +3 Faith for a qualifying Holy Site |
-| Grand Opera | +3 Culture for a qualifying Theater Square |
-| Town Charters | +3 Gold for a qualifying Commercial Hub |
-| Naval Infrastructure | +3 Gold for a qualifying Harbor |
-| Craftsmen | +3 Production for a qualifying Industrial Zone |
-| Five-Year Plan | Independent Campus Science and Industrial Zone Production components |
-| Economic Union | Independent Commercial Hub and Harbor Gold components |
-
-The combined cards use inclusive OR eligibility: either qualifying district contributes, and both contribute when both qualify, even in different cities. A city with both qualifying Economic Union districts contributes a hypothetical +6 Gold. Each unique district replacement satisfies the same component, without a duplicate bonus. Serfdom and Public Works retain one inactive **player-scoped** envoy signal each, with Amount=1; it does not scale per city.
-
-Belief signals replace the former generic envoy bonuses:
-
-| Belief | Inactive signal and qualifying scope |
-|---|---|
-| Work Ethic | +3 Production per owned city with a Holy Site at +3 Faith adjacency or higher |
-| Jesuit Education | +1 Science and +1 Culture per owned city with a Holy Site |
-| Choral Music | +3 Culture per owned city with a Holy Site |
-| Feed the World | +1 Food per owned city with a Holy Site |
-| Zen Meditation | +1 Food per owned city with a Holy Site, retaining the original growth proxy for amenities |
-| Religious Community | +1 Gold per owned city with a Holy Site |
-| Tithe | Native valuation retained; artificial signal deferred |
-| Crusade | One inactive envoy signal (Amount=1) in a military AI Palace city; requires both Palace and military marker |
-| Defender of the Faith | One inactive envoy signal (Amount=1) in an AI Palace city while at war with another major civilization; requires Palace and temporary war marker |
-
-Only Work Ethic has an adjacency threshold among these follower-belief signals. The other Holy Site signals do not require Shrine/Temple construction or an already-founded religion. Jesuit Education's Science and Zen Meditation's Food proxies come from the original belief implementation in commit `b94b5af`.
-
-Tithe's artificial signal is deferred. The traced city-religion handler treats an unset evaluation religion (-1) as matching every city; the founder handler also accepts that wildcard. A direct all-cities signal could therefore overvalue Tithe before founding. The native Tithe effects remain unchanged until strict religion scope can be established.
-
-Crusade's former military-trait owner gate was not verified in a military/nonmilitary runtime comparison; the traced scorer skips owner gates and has no leader-trait requirement handler. `Rose_AI_ChoiceMarkers.lua` instead reads the existing `TRAIT_LEADER_AGGRESSIVE_MILITARY` classification (including inherited leader traits) and maintains an internal, unbuildable marker in those AI leaders' cities. The marker has no yields, maintenance, amenities, housing, defenses, or attached modifiers. The belief's TEST_ALL city subject requirements check both marker and Palace in the same city, while its contradictory owner requirements block the hypothetical envoy effect. Its custom modifier combines `COLLECTION_PLAYER_CITIES` with `EFFECT_ADJUST_DUPLICATE_FIRST_INFLUENCE_TOKEN`. The traced evaluator checks city subjects before adding score, and its no-match fallback adds none. This gives one contribution from the Palace city, not one per owned city; Amount=1 is not a fixed score. No religion/founder gate is added. Markers stay in all eligible cities so the SQL filter follows native Palace movement without special capital-transfer Lua. The helper removes markers from ineligible owners and reconciles founding, conquest, turn start, and reload on the next turn; it does not assume the native grant effect cleans up captures. The helper uses Firaxis's ordinary-building creation call `(buildingIndex, 100)` and removes any marker queue entry during cleanup. This indirect scoring gate needs a fresh-game military/nonmilitary comparison.
-
-Defender of the Faith uses a separate, zero-yield war marker for any alive major AI currently fighting another alive major civilization. Wars against humans count; wars only against city-states or barbarians do not. No military-leader or religion-founder condition is added. The helper reads current diplomacy on each reconciliation, keeps the marker while any qualifying war remains, and removes it after the last qualifying war ends. Markers change only on synchronized turn-start, founding, and conquest hooks so that multiplayer clients stay in step; a mid-turn declaration or peace is reflected at the next player's turn start. Both envoy beliefs retain their native effects, and an already-chosen belief is never removed or changed.
-
-Government signals remain the existing inactive envoy experiment: 12 components across nine governments, with unchanged founder and leader owner checks. Those owner checks are **not proven to restrict AI scoring**. No expanded policy or belief district eligibility relies on them.
-
-The registry emits 33 components across 10 cards, nine governments, and eight beliefs. Native card, government, and belief effects remain intact. No Gold compensation, treasury accounting, or old-save migration is present. Start a **fresh game after restarting Civ VI** for this structural change. Check native AI choice logs, the loaded gameplay database, and `Rose AI: ... military/war choice marker` messages; compare actual yields against a control when testing new signal types.
+On Prince difficulty and above, AI players get +5 combat strength against barbarians and pay 35% less Gold (and with Gathering Storm 35% fewer strategic resources) to upgrade units; this stacks with Professional Army. The civic grants above are also AI-only.
 
 ## Compatibility
 
-Rose AI changes AI lists, leader traits, strategies, operation teams, behavior trees, gameplay Lua, and an InGame UI context. Mods that replace the same records may overwrite Rose or be overwritten according to load order.
+- **Rose Better Starts:** compatible; it runs only during map generation.
+- **AI+, RomanHoliday's AI, Real Strategy and other broad AI overhauls:** not supported together; they change the same AI lists, strategies, operations and behavior trees.
+- **Map generators and start-balancing mods:** generally independent of Rose AI.
 
-- **Rose Better Starts:** compatible. It runs only during map generation and does not touch Rose AI's systems.
-- **AI+, RomanHoliday's AI, Real Strategy, and other broad AI overhauls:** not supported together. Their AI lists, strategies, operations, or behavior trees overlap substantially.
-- **Map generators and start-balancing mods:** generally separate from Rose AI, subject to their own mutual compatibility rules.
-
-For a clean test, enable only one copy of Rose AI. Do not keep both a Workshop copy and a local development copy active.
+Enable only one copy of Rose AI at a time (not a Workshop copy and a local copy together).
 
 ## Installation
 
-1. Copy the complete `rose-ai-mod` folder into the Civ VI Mods directory, commonly:
+Subscribe on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3696783308), or copy this folder into the Civ VI Mods directory (commonly `%USERPROFILE%\Documents\My Games\Sid Meier's Civilization VI\Mods\Rose AI`, with `Rose_AI.modinfo` directly inside). Enable **Rose AI Mod** under Additional Content and start a new game: database and behavior-tree changes do not reliably apply to an existing save.
 
-   ```text
-   %USERPROFILE%\Documents\My Games\Sid Meier's Civilization VI\Mods\Rose AI
-   ```
+## Checking that it loaded
 
-2. Confirm `Rose_AI.modinfo` is directly inside that folder.
-3. Enable **Rose AI Mod** under Additional Content.
-4. Start a new game. Database and behavior-tree changes are not reliably applied retroactively to an existing save.
+The logs are in `%LOCALAPPDATA%\Firaxis Games\Sid Meier's Civilization VI\Logs`:
 
-## Verification and troubleshooting
-
-The Civ VI logs are normally located at:
-
-```text
-%LOCALAPPDATA%\Firaxis Games\Sid Meier's Civilization VI\Logs
-```
-
-For a fresh-game test:
-
-1. In `Modding.log`, confirm that `ROSE_AI`, `ROSE_AI_INGAME_BRIDGE`, and `ROSE_AI_SCRIPTS` load.
-2. In `Database.log`, look for Rose-related SQL/XML errors and confirm gameplay foreign-key validation passes.
-3. In `Lua.log`, search for `Rose AI:` load, civic-grant, war-state, policy-repair, naval-operation, and runtime-error messages. Per-turn diagnostics (policy audit, stuck Traders) are off by default; set `ROSE_VERBOSE_LOGS = true` at the top of `core/scripts/Rose_AI_Core.lua` and `core/scripts/Rose_AI_InGame.lua` to turn them on.
-4. For military behavior, correlate `AI_Behavior_Trees.csv`, `AI_Operation.csv`, `AI_Operation_Eval.csv`, `AI_CityBuild.csv`, and `UnitOperations.log`.
-
-A behavior-tree `SUCCESS` means that a node completed or accepted its task; it does not by itself prove that a unit carried out the intended map action. Confirm movement, attacks, and pillaging in `UnitOperations.log` or in-game observation.
+1. `Modding.log`: the `ROSE_AI`, `ROSE_AI_INGAME_BRIDGE` and `ROSE_AI_SCRIPTS` components load.
+2. `Database.log`: no Rose SQL or XML errors, and gameplay validation passes.
+3. `Lua.log`: `Rose AI:` lines for loading, civic grants, war strategies, the war director, nuclear strikes and errors. Per-turn diagnostics print only when `ROSE_VERBOSE_LOGS` is true at the top of `core/scripts/Rose_AI_Core.lua` and `core/scripts/Rose_AI_InGame.lua` (false in Workshop releases).
+4. Military behavior: `AI_Operation.csv`, `AI_Behavior_Trees.csv`, `AI_CityBuild.csv` and `UnitOperations.log`. A behavior-tree `SUCCESS` means a node completed or accepted its task; confirm the actual moves and attacks in `UnitOperations.log`.
 
 ## Project layout
 
 ```text
-Rose_AI.modinfo                 Mod metadata and component load order
+Rose_AI.modinfo                Mod metadata; database files load by their Priority
 core/
-  strategies/
-    Rose_Strategies.sql        Era and dynamic war and austerity strategies
-    Rose_Strategy_Lists.sql    Lists attached to the war and austerity strategies
-  leaders/
-    Rose_Leader_Traits.sql     Leader trait membership and Rose's leader traits
-    Rose_Leader_Lists.sql      Leader-specific priorities
-  economy/
-    Rose_Techs_Civics.sql      Technology and civic priorities
-    Rose_Yields.sql            Era yield and pseudoyield preferences
-    Rose_Districts.sql         District priorities
-    Rose_Units.sql             Builder priorities, barbarian bonus, upgrade discount
-  choices/
-    Rose_Belief_Signals.sql    Shared choice-signal registry and belief preferences
-    Rose_Policy_Signals.sql    Conditional inactive choice-signal modifiers
-  military/
-    Rose_Operation_Roles.sql   Operation roles and concurrency limits
-    Operations.xml             Operation and operation-team tuning
-    trees/                     One behavior tree per file
-  scripts/
-    Rose_AI_Gameplay.lua       Gameplay entry script; includes the modules below
-    Rose_AI_Core.lua ...       Modules: civic grants, war strategies, naval, nuclear, war director, diagnostics
-    Rose_AI_ChoiceMarkers.lua  Choice marker buildings
-    Rose_AI_InGame.lua/.xml    UI-side readings (military strength, income, policy audit)
+  strategies/                  Era-onward, war and austerity strategies and their lists
+  leaders/                     Leader trait membership and leader-specific lists
+  economy/                     Tech, civic, yield, district and unit priorities; AI-only bonuses
+  choices/                     Belief, policy-card and government choice signals
+  military/                    Operation roles, slots and teams; trees/ holds one behavior tree per file
+  scripts/                     Gameplay Lua (entry script and modules), choice markers, InGame bridge
 ```
 
-Rose AI is under active development. Results should be evaluated across multiple games and seeds because Civ VI's AI choices remain situational and probabilistic.
+Rose AI is under active development. Judge its effects over several games and seeds: Civ VI's AI choices are situational and probabilistic.

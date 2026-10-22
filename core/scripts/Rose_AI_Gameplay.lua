@@ -48,6 +48,7 @@ local TryWarDirector = RoseMod.TryWarDirector;
 local UpdateCityStateOperations = RoseMod.UpdateCityStateOperations;
 local UpdateOperationProbe = RoseMod.UpdateOperationProbe;
 local TryStartNavalSuperiority = RoseMod.TryStartNavalSuperiority;
+local UpdateNavalFollowUp = RoseMod.UpdateNavalSuperiorityFollowUp;
 
 -- Update latches, then grant at most one ready civic or repair dead policy
 -- cards.
@@ -67,6 +68,7 @@ function OnPlayerTurnStartComplete(iPlayerID)
 	if ROSE_VERBOSE_LOGS then
 		Guard("City-state operation report", UpdateCityStateOperations, iPlayerID);
 		Guard("Operation probe", UpdateOperationProbe, iPlayerID);
+		Guard("Naval superiority follow-up", UpdateNavalFollowUp, iPlayerID);
 	end
 	TryStartNavalSuperiority(iPlayerID);
 end

@@ -233,6 +233,174 @@ local function GlobalSummary(tG)
 	return tG.Total .. " (" .. table.concat(tParts, " ") .. ")";
 end
 
+-- ============================================================================
+-- Adjacency signal values (verbose only, print-only): what the AI card scorer
+-- is shown for each adjacency card. The signals are ten inactive +5 tiers per
+-- card (ROSE_CHOICE_POLICY_<CARD>_ADJ<n>, each gated by a
+-- REQUIREMENT_CITY_HAS_HIGH_ADJACENCY_DISTRICT of adjacency n or more), so a
+-- card's value is 5 per adjacency point per city, up to 10 points. Read from
+-- the player's completed districts, as value/qualifying cities per card (cards
+-- at 0 left out), printed when the text changes. AGENTS.md "Adjacency cards".
+-- ============================================================================
+local ADJACENCY_TIER_PATTERN = "^ROSE_CHOICE_POLICY_(.+)_ADJ(%d+)$";
+local ADJACENCY_REQUIREMENT_TYPE = "REQUIREMENT_CITY_HAS_HIGH_ADJACENCY_DISTRICT";
+-- Built once from GameInfo: card name -> { Tiers = { { Amount, Gates = { { District, Yield, Amount } } } } },
+-- the district types and the yield indices the gates read.
+local tAdjacencyCards = nil;
+local tAdjacencyDistricts = nil;
+local tAdjacencyYields = nil;
+local tAdjacencyText = {};
+local bAdjacencyErrorPrinted = false;
+
+local function BuildAdjacencyTables()
+	if tAdjacencyCards ~= nil then return; end
+	local tTiers = {};
+	local tPolicyOf = {};
+	for row in GameInfo.PolicyModifiers() do
+		if string.match(row.ModifierId, ADJACENCY_TIER_PATTERN) ~= nil then
+			tPolicyOf[row.ModifierId] = row.PolicyType;
+		end
+	end
+	local tTiersOfSet = {};
+	for row in GameInfo.Modifiers() do
+		local sCard = string.match(row.ModifierId, ADJACENCY_TIER_PATTERN);
+		if sCard ~= nil and row.SubjectRequirementSetId ~= nil then
+			local sPolicy = tPolicyOf[row.ModifierId];
+			if sPolicy ~= nil then sCard = string.gsub(sPolicy, "^POLICY_", ""); end
+			local kTier = { Card = sCard, Amount = 0, Gates = {} };
+			tTiers[row.ModifierId] = kTier;
+			tTiersOfSet[row.SubjectRequirementSetId] = tTiersOfSet[row.SubjectRequirementSetId] or {};
+			table.insert(tTiersOfSet[row.SubjectRequirementSetId], kTier);
+		end
+	end
+	for row in GameInfo.ModifierArguments() do
+		local kTier = tTiers[row.ModifierId];
+		if kTier ~= nil and row.Name == "Amount" then kTier.Amount = tonumber(row.Value) or 0; end
+	end
+	-- Requirement ID -> { Tiers, District, Yield, Amount } for the high-adjacency requirements.
+	local tGates = {};
+	for row in GameInfo.RequirementSetRequirements() do
+		local tSetTiers = tTiersOfSet[row.RequirementSetId];
+		if tSetTiers ~= nil then
+			local kRequirement = GameInfo.Requirements[row.RequirementId];
+			if kRequirement ~= nil and kRequirement.RequirementType == ADJACENCY_REQUIREMENT_TYPE then
+				tGates[row.RequirementId] = { Tiers = tSetTiers };
+			end
+		end
+	end
+	for row in GameInfo.RequirementArguments() do
+		local kGate = tGates[row.RequirementId];
+		if kGate ~= nil then
+			if row.Name == "DistrictType" then kGate.District = row.Value; end
+			if row.Name == "YieldType" then kGate.Yield = row.Value; end
+			if row.Name == "Amount" then kGate.Amount = tonumber(row.Value); end
+		end
+	end
+	local tCards = {};
+	local tDistricts = {};
+	local tYields = {};
+	for _, kGate in pairs(tGates) do
+		local kYield = kGate.Yield ~= nil and GameInfo.Yields[kGate.Yield] or nil;
+		if kGate.District ~= nil and kGate.Amount ~= nil and kYield ~= nil then
+			-- The yield index is the Yields row's own (Food 0), as GetAdjacencyYield takes it.
+			for _, kTier in ipairs(kGate.Tiers) do
+				table.insert(kTier.Gates, { District = kGate.District, Yield = kYield.Index, Amount = kGate.Amount });
+			end
+			tDistricts[kGate.District] = true;
+			tYields[kYield.Index] = true;
+		end
+	end
+	for _, kTier in pairs(tTiers) do
+		if #kTier.Gates > 0 and kTier.Amount > 0 then
+			local kCard = tCards[kTier.Card];
+			if kCard == nil then
+				kCard = { Tiers = {} };
+				tCards[kTier.Card] = kCard;
+			end
+			table.insert(kCard.Tiers, kTier);
+		end
+	end
+	tAdjacencyDistricts = tDistricts;
+	tAdjacencyYields = tYields;
+	tAdjacencyCards = tCards;
+end
+
+-- "CARD value/cities ..." in card name order; "none" when every card is at 0.
+local function ReadAdjacencySignals(pPlayer)
+	BuildAdjacencyTables();
+	local tValue = {};
+	local tCities = {};
+	for _, pCity in pPlayer:GetCities():Members() do
+		-- Best adjacency of a completed district of each gate type, per yield.
+		local tAdjacency = {};
+		for _, pDistrict in pCity:GetDistricts():Members() do
+			local kDistrict = GameInfo.Districts[pDistrict:GetType()];
+			local bComplete = true;
+			if pDistrict.IsComplete ~= nil then bComplete = pDistrict:IsComplete(); end
+			if bComplete and kDistrict ~= nil and tAdjacencyDistricts[kDistrict.DistrictType] then
+				local tByYield = tAdjacency[kDistrict.DistrictType];
+				if tByYield == nil then
+					tByYield = {};
+					tAdjacency[kDistrict.DistrictType] = tByYield;
+				end
+				for iYield in pairs(tAdjacencyYields) do
+					local iAdjacency = pDistrict:GetAdjacencyYield(iYield) or 0;
+					if iAdjacency > (tByYield[iYield] or 0) then tByYield[iYield] = iAdjacency; end
+				end
+			end
+		end
+		for sCard, kCard in pairs(tAdjacencyCards) do
+			local iCityValue = 0;
+			for _, kTier in ipairs(kCard.Tiers) do
+				for _, kGate in ipairs(kTier.Gates) do
+					local tByYield = tAdjacency[kGate.District];
+					if tByYield ~= nil and (tByYield[kGate.Yield] or 0) >= kGate.Amount then
+						iCityValue = iCityValue + kTier.Amount;
+						break;
+					end
+				end
+			end
+			if iCityValue > 0 then
+				tValue[sCard] = (tValue[sCard] or 0) + iCityValue;
+				tCities[sCard] = (tCities[sCard] or 0) + 1;
+			end
+		end
+	end
+	local tNames = {};
+	for sCard in pairs(tValue) do table.insert(tNames, sCard); end
+	table.sort(tNames);
+	local tParts = {};
+	for _, sCard in ipairs(tNames) do
+		table.insert(tParts, sCard .. " " .. tValue[sCard] .. "/" .. tCities[sCard]);
+	end
+	if #tParts == 0 then return "none"; end
+	return table.concat(tParts, " ");
+end
+
+local function ReportAdjacencySignals(iPlayerID, iTurn)
+	local bOk, sText = pcall(function()
+		local pPlayer = Players[iPlayerID];
+		if pPlayer == nil or pPlayer:IsHuman() then return nil; end
+		return ReadAdjacencySignals(pPlayer);
+	end);
+	if not bOk then
+		if not bAdjacencyErrorPrinted then
+			bAdjacencyErrorPrinted = true;
+			print("Rose_AI_InGame: Rose AI ERROR: Adjacency signals: " .. tostring(sText));
+		end
+		return;
+	end
+	if sText == nil or tAdjacencyText[iPlayerID] == sText then return; end
+	-- Nothing to report until a card first rises above 0.
+	if tAdjacencyText[iPlayerID] == nil and sText == "none" then
+		tAdjacencyText[iPlayerID] = sText;
+		return;
+	end
+	tAdjacencyText[iPlayerID] = sText;
+	print("Rose_AI_InGame: Rose AI: Adjacency signals turn " .. iTurn
+		.. " player " .. iPlayerID .. ": " .. sText);
+end
+
 -- tOnly: set of player IDs to audit, or nil for every AI major.
 local function AuditPolicyModifiers(tOnly)
 	BuildAuditTables();
@@ -352,6 +520,8 @@ local function AuditPolicyModifiers(tOnly)
 			end
 		end
 		tDeadPolicySlots[iPlayerID] = { Turn = iTurn, Slots = iInstanceErrors == 0 and tDead or nil };
+
+		if ROSE_VERBOSE_LOGS then ReportAdjacencySignals(iPlayerID, iTurn); end
 	end
 end
 

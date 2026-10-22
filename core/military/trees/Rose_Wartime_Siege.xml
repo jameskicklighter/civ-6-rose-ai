@@ -21,12 +21,13 @@ AGENTS.md "Rose Wartime Siege operation and the engine's wartime assaults off",
   </AiOperationDefs>
   <AiTeams>
     <Row TeamName="Rose Siege Force" />
+    <Row TeamName="Rose Siege Naval Force" />
   </AiTeams>
-  <!-- The wartime walled strength ratios and the base coastal naval team. -->
+  <!-- The wartime walled strength ratios, and the base coastal naval team's ratios for Rose's naval team. -->
   <AiOperationTeams>
     <Row TeamName="Rose Siege Force" OperationName="Rose Wartime Siege"
       InitialStrengthAdvantage="0.6" OngoingStrengthAdvantage="1.0" />
-    <Row TeamName="City Naval Attack Force" OperationName="Rose Wartime Siege"
+    <Row TeamName="Rose Siege Naval Force" OperationName="Rose Wartime Siege"
       InitialStrengthAdvantage="-5" OngoingStrengthAdvantage="3" Condition="IsCoastalTarget" />
   </AiOperationTeams>
   <!--
@@ -46,6 +47,12 @@ AGENTS.md "Rose Wartime Siege operation and the engine's wartime assaults off",
     <Row TeamName="Rose Siege Force" AiType="UNITTYPE_CIVILIAN" MaxNumber="0" />
     <Row TeamName="Rose Siege Force" AiType="UNITTYPE_AIR" MaxNumber="0" />
     <Row TeamName="Rose Siege Force" AiType="UNITTYPE_NAVAL" MaxNumber="0" />
+    <!-- Coastal targets: the base City Naval Attack Force rows plus 2-5 ranged warships that reach 2 tiles; AGENTS.md "Coastal siege ships". -->
+    <Row TeamName="Rose Siege Naval Force" AiType="UNITTYPE_NAVAL" MinPercentage="1" MaxPercentage="1" />
+    <Row TeamName="Rose Siege Naval Force" AiType="UNITTYPE_ROSE_NAVAL_SIEGE" MinNumber="2" MaxNumber="5" />
+    <Row TeamName="Rose Siege Naval Force" AiType="UNITTYPE_MELEE" MinNumber="0" />
+    <Row TeamName="Rose Siege Naval Force" AiType="UNITTYPE_RANGED" MinNumber="0" />
+    <Row TeamName="Rose Siege Naval Force" AiType="UNITTYPE_CIVILIAN_LEADER" MaxNumber="1" />
   </OpTeamRequirements>
   <AllowedOperations>
     <Row ListType="Default_List" OperationDef="Rose Wartime Siege" />

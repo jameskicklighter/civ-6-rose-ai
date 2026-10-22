@@ -5,34 +5,38 @@
 -- AGENTS.md "### military/ (Rose_Operation_Roles.sql, Operations.xml, trees/)", 'Known engine behaviour: operation recruitment and slots'.
 -- ============================================================================
 
--- The four derived roles are rebuilt from scratch.
+-- The five derived roles are rebuilt from scratch.
 DELETE FROM OpTeamRequirements
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
     'UNITTYPE_ROSE_CONTRACT_MELEE',
     'UNITTYPE_ROSE_CONTRACT_EXPLORE',
-    'UNITTYPE_ROSE_SIEGE_STRIKE'
+    'UNITTYPE_ROSE_SIEGE_STRIKE',
+    'UNITTYPE_ROSE_NAVAL_SIEGE'
 );
 DELETE FROM UnitAiInfos
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
     'UNITTYPE_ROSE_CONTRACT_MELEE',
     'UNITTYPE_ROSE_CONTRACT_EXPLORE',
-    'UNITTYPE_ROSE_SIEGE_STRIKE'
+    'UNITTYPE_ROSE_SIEGE_STRIKE',
+    'UNITTYPE_ROSE_NAVAL_SIEGE'
 );
 DELETE FROM UnitAiTypes
 WHERE AiType IN (
     'UNITTYPE_ROSE_CONTRACT_COMBAT',
     'UNITTYPE_ROSE_CONTRACT_MELEE',
     'UNITTYPE_ROSE_CONTRACT_EXPLORE',
-    'UNITTYPE_ROSE_SIEGE_STRIKE'
+    'UNITTYPE_ROSE_SIEGE_STRIKE',
+    'UNITTYPE_ROSE_NAVAL_SIEGE'
 );
 
 INSERT OR IGNORE INTO UnitAiTypes (AiType) VALUES
 ('UNITTYPE_ROSE_CONTRACT_COMBAT'),
 ('UNITTYPE_ROSE_CONTRACT_MELEE'),
 ('UNITTYPE_ROSE_CONTRACT_EXPLORE'),
-('UNITTYPE_ROSE_SIEGE_STRIKE');
+('UNITTYPE_ROSE_SIEGE_STRIKE'),
+('UNITTYPE_ROSE_NAVAL_SIEGE');
 
 -- Trainable land combat, melee and explore roles without faith-only units, so
 -- operation teams stop contracting Warrior Monks, which no city can train
@@ -79,6 +83,18 @@ SELECT DISTINCT Info.UnitType, 'UNITTYPE_ROSE_SIEGE_STRIKE'
 FROM UnitAiInfos AS Info
 JOIN Units AS Unit ON Unit.UnitType = Info.UnitType
 WHERE Info.AiType IN ('UNITTYPE_SIEGE', 'UNITTYPE_AIR_SIEGE')
+  AND Unit.CanTrain = 1
+  AND Unit.MustPurchase = 0
+  AND Unit.EnabledByReligion = 0;
+
+-- Naval wall-breaker role: trainable ranged warships reaching 2 tiles, the
+-- minimum of the director's coastal siege team; AGENTS.md "Coastal siege ships"
+INSERT OR IGNORE INTO UnitAiInfos (UnitType, AiType)
+SELECT Unit.UnitType, 'UNITTYPE_ROSE_NAVAL_SIEGE'
+FROM Units AS Unit
+WHERE Unit.Domain = 'DOMAIN_SEA'
+  AND Unit.PromotionClass = 'PROMOTION_CLASS_NAVAL_RANGED'
+  AND Unit.Range >= 2
   AND Unit.CanTrain = 1
   AND Unit.MustPurchase = 0
   AND Unit.EnabledByReligion = 0;

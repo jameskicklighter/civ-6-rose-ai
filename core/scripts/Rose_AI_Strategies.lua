@@ -16,21 +16,14 @@ local tForbidStrategy = RoseMod.ForbidStrategy;
 
 -- ============================================================================
 -- Dynamic major-war strategy conditions. "Call Lua Function" conditions call
--- the matching GameEvents callback with (player ID, threshold); the war
--- context is cached for one game turn because three strategies read it.
+-- the matching GameEvents callback with (player ID, threshold). The war
+-- context is read fresh each time: strengths are relayed player properties, and
+-- a Lua-side cache would differ on a machine that rejoined mid-turn.
 -- ============================================================================
 
-local tWarStrengthCache = {};
 local tWarStrategyState = {};
 
 local function GetMajorWarContext(iPlayerID)
-	local iTurn = Game.GetCurrentGameTurn();
-	local kCached = tWarStrengthCache[iPlayerID];
-	if kCached ~= nil and kCached.Turn == iTurn then
-		return kCached.Wars, kCached.OurStrength, kCached.EnemyStrength,
-			kCached.StrengthValid;
-	end
-
 	local pPlayer = Players[iPlayerID];
 	local iWars = 0;
 	local iEnemyStrength = 0;
@@ -45,13 +38,6 @@ local function GetMajorWarContext(iPlayerID)
 		end
 	end
 
-	tWarStrengthCache[iPlayerID] = {
-		Turn = iTurn,
-		Wars = iWars,
-		OurStrength = iOurStrength,
-		EnemyStrength = iEnemyStrength,
-		StrengthValid = bStrengthValid
-	};
 	return iWars, iOurStrength, iEnemyStrength, bStrengthValid;
 end
 

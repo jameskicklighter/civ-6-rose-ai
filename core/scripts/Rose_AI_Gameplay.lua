@@ -4,7 +4,8 @@
 -- and runs them from two hooks: PlayerTurnStarted (war and austerity latches,
 -- civic research check, policy repair, civic grant) and PlayerTurnStartComplete
 -- (nuclear strike, war director, verbose reports, naval superiority); the
--- Trader diagnostic runs at both. AGENTS.md "Rose_AI_Gameplay.lua".
+-- Trader diagnostic runs at both. RoseBridgeRelay stores the host's bridge
+-- readings. AGENTS.md "Rose_AI_Gameplay.lua".
 -- ============================================================================
 
 print("Rose AI: Loading gameplay support script");
@@ -39,6 +40,7 @@ include("Rose_AI_Diagnostics");
 
 local ROSE_VERBOSE_LOGS = RoseMod.VerboseLogs; -- set in Rose_AI_Core
 local Guard = RoseMod.Guard;
+local StoreBridgeRelay = RoseMod.StoreBridgeRelay;
 local UpdateWarStrategyLatches = RoseMod.UpdateWarStrategyLatches;
 local UpdateAusterityLatch = RoseMod.UpdateAusterityLatch;
 local GrantCivicOrRepairPolicies = RoseMod.GrantCivicOrRepairPolicies;
@@ -73,7 +75,14 @@ function OnPlayerTurnStartComplete(iPlayerID)
 	TryStartNavalSuperiority(iPlayerID);
 end
 
+-- The host's bridge readings, sent by Rose_AI_InGame.lua as a player operation
+-- (EXECUTE_SCRIPT) that every machine processes; stored as player properties.
+function OnBridgeRelay(iSender, kParams)
+	Guard("Bridge relay", StoreBridgeRelay, iSender, kParams);
+end
+
 GameEvents.PlayerTurnStarted.Add(OnPlayerTurnStarted);
 GameEvents.PlayerTurnStartComplete.Add(OnPlayerTurnStartComplete);
+GameEvents.RoseBridgeRelay.Add(OnBridgeRelay);
 
 print("Rose AI: Gameplay support script loaded");

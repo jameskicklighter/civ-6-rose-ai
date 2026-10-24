@@ -238,9 +238,11 @@ end
 -- is shown for each adjacency card. The signals are ten inactive +5 tiers per
 -- card (ROSE_CHOICE_POLICY_<CARD>_ADJ<n>, each gated by a
 -- REQUIREMENT_CITY_HAS_HIGH_ADJACENCY_DISTRICT of adjacency n or more), so a
--- card's value is 5 per adjacency point per city, up to 10 points. Read from
--- the player's completed districts, as value/qualifying cities per card (cards
--- at 0 left out), printed when the text changes. AGENTS.md "Adjacency cards".
+-- card's value is 5 per adjacency point per city, up to 10 points. The gates
+-- name base districts and a unique replacement counts as its base, as in the
+-- scorer. Read from the player's completed districts, as value/qualifying
+-- cities per card (cards at 0 left out), printed when the text changes.
+-- AGENTS.md "Adjacency cards".
 -- ============================================================================
 local ADJACENCY_TIER_PATTERN = "^ROSE_CHOICE_POLICY_(.+)_ADJ(%d+)$";
 local ADJACENCY_REQUIREMENT_TYPE = "REQUIREMENT_CITY_HAS_HIGH_ADJACENCY_DISTRICT";
@@ -249,6 +251,8 @@ local ADJACENCY_REQUIREMENT_TYPE = "REQUIREMENT_CITY_HAS_HIGH_ADJACENCY_DISTRICT
 local tAdjacencyCards = nil;
 local tAdjacencyDistricts = nil;
 local tAdjacencyYields = nil;
+-- Unique district type -> the base type it replaces.
+local tAdjacencyBase = nil;
 local tAdjacencyText = {};
 local bAdjacencyErrorPrinted = false;
 
@@ -320,8 +324,11 @@ local function BuildAdjacencyTables()
 			table.insert(kCard.Tiers, kTier);
 		end
 	end
+	local tBase = {};
+	for row in GameInfo.DistrictReplaces() do tBase[row.CivUniqueDistrictType] = row.ReplacesDistrictType; end
 	tAdjacencyDistricts = tDistricts;
 	tAdjacencyYields = tYields;
+	tAdjacencyBase = tBase;
 	tAdjacencyCards = tCards;
 end
 
@@ -331,17 +338,20 @@ local function ReadAdjacencySignals(pPlayer)
 	local tValue = {};
 	local tCities = {};
 	for _, pCity in pPlayer:GetCities():Members() do
-		-- Best adjacency of a completed district of each gate type, per yield.
+		-- Best adjacency of a completed district of each gate type (a unique
+		-- replacement as its base), per yield.
 		local tAdjacency = {};
 		for _, pDistrict in pCity:GetDistricts():Members() do
 			local kDistrict = GameInfo.Districts[pDistrict:GetType()];
 			local bComplete = true;
 			if pDistrict.IsComplete ~= nil then bComplete = pDistrict:IsComplete(); end
-			if bComplete and kDistrict ~= nil and tAdjacencyDistricts[kDistrict.DistrictType] then
-				local tByYield = tAdjacency[kDistrict.DistrictType];
+			local sType = kDistrict ~= nil
+				and (tAdjacencyBase[kDistrict.DistrictType] or kDistrict.DistrictType) or nil;
+			if bComplete and sType ~= nil and tAdjacencyDistricts[sType] then
+				local tByYield = tAdjacency[sType];
 				if tByYield == nil then
 					tByYield = {};
-					tAdjacency[kDistrict.DistrictType] = tByYield;
+					tAdjacency[sType] = tByYield;
 				end
 				for iYield in pairs(tAdjacencyYields) do
 					local iAdjacency = pDistrict:GetAdjacencyYield(iYield) or 0;

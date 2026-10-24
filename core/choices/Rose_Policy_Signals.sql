@@ -90,8 +90,7 @@ INSERT INTO GlobalParameters (Name, Value) VALUES
 ('ROSE_CHOICE_MIN_ADJACENCY', '3');
 
 -- District gates of the cards (the yield is the adjacency to test), one per
--- tier, then resolved to the district and its unique replacements, which
--- share one TEST_ANY gate; AGENTS.md "Adjacency cards"
+-- tier, then resolved to the districts present; AGENTS.md "Adjacency cards"
 WITH DistrictGates (CardId, DistrictType, YieldType) AS (VALUES
 ('ROSE_CHOICE_POLICY_NATURAL_PHILOSOPHY', 'DISTRICT_CAMPUS', 'YIELD_SCIENCE'),
 ('ROSE_CHOICE_POLICY_SCRIPTURE', 'DISTRICT_HOLY_SITE', 'YIELD_FAITH'),
@@ -108,19 +107,26 @@ INSERT INTO RoseChoiceDistricts (BiasId, DistrictType, YieldType)
 SELECT b.BiasId, d.DistrictType, d.YieldType FROM DistrictGates d
 JOIN RoseChoiceBiases b ON b.BiasId = d.CardId || '_ADJ' || b.GateValue;
 
+-- Base districts only: the scorer's district requirements also match their
+-- unique replacements; AGENTS.md "Card value shown by Extended Policy Cards"
 INSERT INTO RoseChoiceResolvedDistricts (BiasId, DistrictType, YieldType)
 SELECT gate.* FROM RoseChoiceDistricts gate
-JOIN Districts d ON d.DistrictType = gate.DistrictType
-UNION
-SELECT gate.BiasId, replacement.CivUniqueDistrictType, gate.YieldType
-FROM RoseChoiceDistricts gate
-JOIN DistrictReplaces replacement ON replacement.ReplacesDistrictType = gate.DistrictType
-JOIN Districts d ON d.DistrictType = replacement.CivUniqueDistrictType;
+JOIN Districts d ON d.DistrictType = gate.DistrictType;
 
--- City subject gates: any qualifying district (TEST_ANY), each a high-adjacency
--- or presence requirement; AGENTS.md "Adjacency cards", "Follower-belief yield signals"
+-- A district signal without its district would have a gate the scorer sees
+-- empty, which passes every city: drop it; AGENTS.md "AI scorer requirement rule"
+DELETE FROM RoseChoiceBiases
+WHERE GateType IN ('ADJACENCY', 'HOLY_SITE')
+  AND BiasId NOT IN (SELECT BiasId FROM RoseChoiceResolvedDistricts);
+
+-- City subject gates: TEST_ALL of the high-adjacency or presence requirement
+-- and "has Future Civic" (added below). The scorer drops the unregistered civic
+-- requirement and sees the district test alone; Real Modifier Analysis
+-- (Extended Policy Cards' card values) fails it and leaves the signal out;
+-- AGENTS.md "Adjacency cards", "Follower-belief yield signals",
+-- "Card value shown by Extended Policy Cards"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType)
-SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'REQUIREMENTSET_TEST_ANY'
+SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'REQUIREMENTSET_TEST_ALL'
 FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE');
 
 INSERT INTO Requirements (RequirementId, RequirementType)
@@ -224,6 +230,12 @@ INSERT INTO RequirementSets (RequirementSetId, RequirementSetType) VALUES
 INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId) VALUES
 ('ROSE_CHOICE_NEVER_ACTIVE', 'ROSE_CHOICE_HAS_FUTURE_CIVIC'),
 ('ROSE_CHOICE_NEVER_ACTIVE', 'ROSE_CHOICE_LACKS_FUTURE_CIVIC');
+
+-- The second requirement of the city district gates (above);
+-- AGENTS.md "Card value shown by Extended Policy Cards"
+INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId)
+SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'ROSE_CHOICE_HAS_FUTURE_CIVIC'
+FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE');
 
 -- One modifier per signal with its arguments, attached to its policy,
 -- government or belief; AGENTS.md "Inactive choice registry"

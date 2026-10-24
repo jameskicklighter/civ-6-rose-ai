@@ -1,10 +1,12 @@
 -- ============================================================================
 -- Rose AI InGame UI bridge: military strength, net Gold income, envoys, Trader
 -- details and dead policy slots for the gameplay scripts (ExposedMembers.RoseAI),
--- plus the policy-modifier audit behind the dead slots. These getters and
--- GameEffects are unavailable in the gameplay context. Hooks: Events.TurnBegin,
--- the civic/government/policy events and GameCoreEventPublishComplete; no saved
--- state. AGENTS.md "Rose_AI_InGame.lua / Rose_AI_InGame.xml".
+-- the policy-modifier audit behind the dead slots, and the bridge relay that
+-- sends the decision readings to every machine. These getters and GameEffects
+-- are unavailable in the gameplay context. Hooks: Events.TurnBegin,
+-- LocalPlayerTurnBegin, LoadScreenClose, the civic/government/policy events and
+-- GameCoreEventPublishComplete; no saved state. AGENTS.md "Rose_AI_InGame.lua /
+-- Rose_AI_InGame.xml".
 -- ============================================================================
 
 print("Rose_AI_InGame: Rose AI: Loading InGame military-strength bridge");
@@ -15,7 +17,7 @@ local RoseAI = ExposedMembers.RoseAI;
 -- Per-turn diagnostic output (policy decks, slot lines, audit class changes).
 -- Off for release; the standalone Rose Policy Audit (DIAG) mod is the test
 -- instrument. Errors always print.
-local ROSE_VERBOSE_LOGS = false;
+local ROSE_VERBOSE_LOGS = true;
 
 function RoseGetMilitaryStrength(iPlayerID)
 	local pPlayer = Players[iPlayerID];
@@ -561,9 +563,141 @@ end
 
 RoseAI.GetDeadPolicySlots = RoseGetDeadPolicySlots;
 
+-- ============================================================================
+-- Bridge relay: the machine that sends (the host, or the only machine) reads
+-- strength and net income for every alive major and the dead policy slots of
+-- every AI major, and sends them to all machines as one EXECUTE_SCRIPT player
+-- operation; the gameplay RoseBridgeRelay handler stores them, so every machine
+-- decides from the same numbers. Sent at the local player's turn start, after a
+-- load, and again when a later audit this turn changes the dead slots. Other
+-- machines skip the audit unless ROSE_VERBOSE_LOGS. AGENTS.md "Bridge relay".
+-- ============================================================================
+local RELAY_EVENT = "RoseBridgeRelay";
+local iRelaySentTurn = nil;
+local sRelaySentDead = nil;
+
+-- Whether this is a network game; nil when unreadable. The game configuration
+-- is the same on every machine, so gameplay may read it from here.
+function RoseIsNetworkGame()
+	local bOk, bNetwork = pcall(function() return GameConfiguration.IsNetworkMultiplayer(); end);
+	if not bOk or type(bNetwork) ~= "boolean" then return nil; end
+	return bNetwork;
+end
+
+RoseAI.IsNetworkGame = RoseIsNetworkGame;
+
+-- The host of a network game, or the only machine; false when unreadable.
+local function IsRelaySender()
+	local bOk, bSender = pcall(function()
+		local iLocal = Game.GetLocalPlayer();
+		if type(iLocal) ~= "number" or iLocal < 0 then return false; end
+		local bNetwork = RoseIsNetworkGame();
+		if bNetwork == nil then return false; end
+		return not bNetwork or Network.IsGameHost() == true;
+	end);
+	return bOk and bSender == true;
+end
+
+local function JoinSorted(tParts)
+	table.sort(tParts);
+	return table.concat(tParts, ";");
+end
+
+-- An integer as an integer, anything else to two places; nil for NaN or infinity.
+local function FormatRelayNumber(n)
+	if type(n) ~= "number" or n ~= n or n == math.huge or n == -math.huge then return nil; end
+	if n == math.floor(n) then return string.format("%d", n); end
+	return string.format("%.2f", n);
+end
+
+-- "id=slot:POLICY:missing,..." for each AI major with a valid audit this turn.
+local function BuildRelayDead()
+	local tParts = {};
+	for _, pPlayer in ipairs(PlayerManager.GetAliveMajors()) do
+		if not pPlayer:IsHuman() then
+			local iPlayerID = pPlayer:GetID();
+			local tDead = RoseGetDeadPolicySlots(iPlayerID);
+			if tDead ~= nil then
+				local tSlots = {};
+				for _, kSlot in ipairs(tDead) do
+					table.insert(tSlots, kSlot.Slot .. ":" .. kSlot.PolicyType .. ":" .. kSlot.Missing);
+				end
+				table.sort(tSlots);
+				table.insert(tParts, iPlayerID .. "=" .. table.concat(tSlots, ","));
+			end
+		end
+	end
+	return JoinSorted(tParts);
+end
+
+local function SendBridgeRelay(sWhy)
+	if not IsRelaySender() then return; end
+	local iTurn = Game.GetCurrentGameTurn();
+	local tStrength = {};
+	local tIncome = {};
+	for _, pPlayer in ipairs(PlayerManager.GetAliveMajors()) do
+		local iPlayerID = pPlayer:GetID();
+		local bOk, iStrength = pcall(RoseGetMilitaryStrength, iPlayerID);
+		local sStrength = bOk and FormatRelayNumber(iStrength) or nil;
+		if sStrength ~= nil then table.insert(tStrength, iPlayerID .. "=" .. sStrength); end
+		local sIncome = FormatRelayNumber(RoseGetNetGoldIncome(iPlayerID));
+		if sIncome ~= nil then table.insert(tIncome, iPlayerID .. "=" .. sIncome); end
+	end
+	local sStrength = JoinSorted(tStrength);
+	local sIncome = JoinSorted(tIncome);
+	local sDead = BuildRelayDead();
+	local iLocal = Game.GetLocalPlayer();
+	UI.RequestPlayerOperation(iLocal, PlayerOperations.EXECUTE_SCRIPT, {
+		OnStart = RELAY_EVENT,
+		Turn = iTurn,
+		Strength = sStrength,
+		Income = sIncome,
+		Dead = sDead,
+		-- The byte lengths of the three fields, so a message cut short is rejected.
+		Check = string.format("%d:%d:%d", #sStrength, #sIncome, #sDead)
+	});
+	iRelaySentTurn = iTurn;
+	sRelaySentDead = sDead;
+	if ROSE_VERBOSE_LOGS then
+		-- A player whose turn has ended may not have its operations processed.
+		local bOk, bActive = pcall(function() return Players[iLocal]:IsTurnActive(); end);
+		print("Rose_AI_InGame: Rose AI: Bridge relay sent turn " .. iTurn .. " (" .. sWhy .. ")"
+			.. ((not bOk) and " (turn activity unreadable)" or (bActive and "" or " while the local turn is not active")));
+	end
+end
+
+-- A failure is printed once per distinct error.
+local sRelayLastError = nil;
+local function TrySendBridgeRelay(sWhy)
+	local bOk, sError = pcall(SendBridgeRelay, sWhy);
+	if not bOk and tostring(sError) ~= sRelayLastError then
+		sRelayLastError = tostring(sError);
+		print("Rose_AI_InGame: Rose AI ERROR: Bridge relay: " .. sRelayLastError);
+	end
+end
+
+-- After a later audit this turn: resend when the dead slots changed.
+local function ResendIfDeadChanged()
+	if iRelaySentTurn ~= Game.GetCurrentGameTurn() or not IsRelaySender() then return; end
+	local bOk, sDead = pcall(BuildRelayDead);
+	if bOk and sDead ~= sRelaySentDead then TrySendBridgeRelay("dead slots changed"); end
+end
+
+local function ShouldAudit()
+	return ROSE_VERBOSE_LOGS or IsRelaySender();
+end
+
+for sEvent, sWhy in pairs({ LocalPlayerTurnBegin = "turn start", LoadScreenClose = "load" }) do
+	if Events[sEvent] ~= nil then
+		Events[sEvent].Add(function() TrySendBridgeRelay(sWhy); end);
+	else
+		print("Rose_AI_InGame: Rose AI ERROR: Bridge relay hook " .. sEvent .. " is missing");
+	end
+end
+
 Events.TurnBegin.Add(function()
 	tAuditDirty = {};
-	RunPolicyAudit(nil);
+	if ShouldAudit() then RunPolicyAudit(nil); end
 end);
 
 -- These UI events carry the player ID first (Firaxis handlers filter it to the
@@ -588,7 +722,9 @@ if Events.GameCoreEventPublishComplete ~= nil then
 		if next(tAuditDirty) == nil then return; end
 		local tOnly = tAuditDirty;
 		tAuditDirty = {};
+		if not ShouldAudit() then return; end
 		RunPolicyAudit(tOnly);
+		ResendIfDeadChanged();
 	end);
 end
 

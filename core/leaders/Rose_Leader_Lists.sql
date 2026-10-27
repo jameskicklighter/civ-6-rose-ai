@@ -1,149 +1,79 @@
 -- ============================================================================
 -- Rose AI: lists attached to leader and civilization traits (AiLists.LeaderType
--- holds the trait), some also tied to an era strategy (Strategy_Priorities).
+-- holds the trait), and the leader-and-era lists, which carry no LeaderType and
+-- sit on a leader era window strategy instead (Rose_Strategies.sql): a trait's
+-- lists apply in every era and a strategy's lists to every player.
 -- Trait membership is in Rose_Leader_Traits.sql.
 -- AGENTS.md "## Current Features", "### leaders/ (Rose_Leader_Traits.sql, Rose_Leader_Lists.sql)".
 -- ============================================================================
 
--- Religious leaders: Holy Site favored in the Ancient era; AGENTS.md "Religious leader Holy Site favored"
+-- Religious leaders: Holy Site favored, Ancient and Classical eras; AGENTS.md "Religious leader Holy Site favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseReligiousAncientDistricts');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseReligiousAncientDistricts',   'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'Districts');
+('RoseReligiousEarlyDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseReligiousEarlyDistricts',    'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseReligiousAncientDistricts');
+('STRATEGY_ROSE_RELIGIOUS_EARLY',  'RoseReligiousEarlyDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseReligiousAncientDistricts',   'DISTRICT_HOLY_SITE', 1, 100);
+('RoseReligiousEarlyDistricts',    'DISTRICT_HOLY_SITE', 1, 100);
 
--- Religious leaders: Holy Site favored in the Classical era; AGENTS.md "Religious leader Holy Site favored"
+-- Religious leaders: Great Prophet points, Ancient and Classical eras; AGENTS.md "Religious leader Great Prophet pseudoyield"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseReligiousClassicalDistricts');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseReligiousClassicalDistricts', 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'Districts');
+('RoseReligiousEarlyPseudoYields');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseReligiousEarlyPseudoYields', 'PseudoYields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseReligiousClassicalDistricts');
+('STRATEGY_ROSE_RELIGIOUS_EARLY',  'RoseReligiousEarlyPseudoYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseReligiousClassicalDistricts', 'DISTRICT_HOLY_SITE', 1, 100);
+('RoseReligiousEarlyPseudoYields', 'PSEUDOYIELD_GPP_PROPHET', 1, 100);
 
--- Religious leaders: Great Prophet points in the Ancient era; AGENTS.md "Religious leader Great Prophet pseudoyield"
+-- Saladin (both personas): a Holy Site before his free Prophet, Classical and Medieval eras; AGENTS.md "Saladin Holy Site favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseReligiousAncientPseudoYields');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseReligiousAncientPseudoYields',   'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'PseudoYields');
+('RoseSaladinHolySiteDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseSaladinHolySiteDistricts',   'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseReligiousAncientPseudoYields');
+('STRATEGY_ROSE_SALADIN_HOLY_SITE', 'RoseSaladinHolySiteDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseReligiousAncientPseudoYields',   'PSEUDOYIELD_GPP_PROPHET', 1, 100);
+('RoseSaladinHolySiteDistricts',   'DISTRICT_HOLY_SITE', 1, 50);
 
--- Religious leaders: Great Prophet points in the Classical era; AGENTS.md "Religious leader Great Prophet pseudoyield"
+-- Avoid Early Holy Sites leaders: Holy Site disfavored, Ancient and Classical eras; AGENTS.md "Avoid Early Holy Sites trait created"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseReligiousClassicalPseudoYields');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseReligiousClassicalPseudoYields', 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'PseudoYields');
+('RoseAvoidHSEarlyDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseAvoidHSEarlyDistricts',      'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseReligiousClassicalPseudoYields');
+('STRATEGY_ROSE_AVOID_HOLY_SITES_EARLY', 'RoseAvoidHSEarlyDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseReligiousClassicalPseudoYields', 'PSEUDOYIELD_GPP_PROPHET', 1, 100);
+('RoseAvoidHSEarlyDistricts',      'DISTRICT_HOLY_SITE', 0, -100);
 
--- Saladin: a Holy Site before his free Prophet, Classical era; AGENTS.md "Saladin Holy Site favored"
+-- Low religious preference: Stonehenge always disfavored (a Buildings list has no effect on a strategy); AGENTS.md "Stonehenge disfavored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseSaladinClassicalDistricts');
+('RoseLowRelBuildings');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseSaladinClassicalDistricts',    'TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH', 'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseSaladinClassicalDistricts');
+('RoseLowRelBuildings',  'TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE',    'Buildings');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseSaladinClassicalDistricts',    'DISTRICT_HOLY_SITE', 1, 50);
+('RoseLowRelBuildings',  'BUILDING_STONEHENGE', 0, -100);
 
--- Saladin: Holy Site, Medieval era; AGENTS.md "Saladin Holy Site favored"
+-- Avoid Early Holy Sites leaders: Stonehenge always disfavored; AGENTS.md "Stonehenge disfavored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseSaladinMedievalDistricts');
+('RoseAvoidHSBuildings');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseSaladinMedievalDistricts',     'TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH', 'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',  'RoseSaladinMedievalDistricts');
+('RoseAvoidHSBuildings', 'TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES', 'Buildings');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseSaladinMedievalDistricts',     'DISTRICT_HOLY_SITE', 1, 50);
+('RoseAvoidHSBuildings', 'BUILDING_STONEHENGE', 0, -100);
 
--- Saladin (Vizier, his own unique trait): Holy Site, Classical era; AGENTS.md "Saladin Holy Site favored"
+-- Religious leaders: Stonehenge always favored (both Saladins are outside the
+-- group); Theodora's base disfavor is removed so it does not cancel the favor;
+-- AGENTS.md "Religious leader Stonehenge favored"
+DELETE FROM AiFavoredItems
+WHERE ListType = 'TheodoraWonders' AND Item = 'BUILDING_STONEHENGE';
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseSaladinAltClassicalDistricts');
+('RoseReligiousBuildings');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseSaladinAltClassicalDistricts', 'TRAIT_LEADER_SALADIN_ALT',            'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseSaladinAltClassicalDistricts');
+('RoseReligiousBuildings', 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'Buildings');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseSaladinAltClassicalDistricts', 'DISTRICT_HOLY_SITE', 1, 50);
-
--- Saladin (Vizier): Holy Site, Medieval era; AGENTS.md "Saladin Holy Site favored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseSaladinAltMedievalDistricts');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseSaladinAltMedievalDistricts',  'TRAIT_LEADER_SALADIN_ALT',            'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',  'RoseSaladinAltMedievalDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseSaladinAltMedievalDistricts',  'DISTRICT_HOLY_SITE', 1, 50);
-
--- Avoid Early Holy Sites leaders: Holy Site disfavored, Ancient era; AGENTS.md "Avoid Early Holy Sites trait created"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseAvoidHSAncientDistricts');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseAvoidHSAncientDistricts',   'TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES', 'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseAvoidHSAncientDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseAvoidHSAncientDistricts',   'DISTRICT_HOLY_SITE', 0, -100);
-
--- Avoid Early Holy Sites leaders: Holy Site disfavored, Classical era; AGENTS.md "Avoid Early Holy Sites trait created"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseAvoidHSClassicalDistricts');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseAvoidHSClassicalDistricts', 'TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES', 'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseAvoidHSClassicalDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseAvoidHSClassicalDistricts', 'DISTRICT_HOLY_SITE', 0, -100);
-
--- Low religious preference: Stonehenge (a Buildings item) disfavored, Ancient era; AGENTS.md "Stonehenge disfavored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseLowRelAncientBuildings');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseLowRelAncientBuildings',    'TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE',       'Buildings');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseLowRelAncientBuildings');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseLowRelAncientBuildings',    'BUILDING_STONEHENGE', 0, -100);
-
--- Low religious preference: Stonehenge disfavored, Classical era; AGENTS.md "Stonehenge disfavored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseLowRelClassicalBuildings');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseLowRelClassicalBuildings',  'TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE',       'Buildings');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseLowRelClassicalBuildings');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseLowRelClassicalBuildings',  'BUILDING_STONEHENGE', 0, -100);
-
--- Avoid Early Holy Sites leaders: Stonehenge disfavored, Ancient era; AGENTS.md "Stonehenge disfavored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseAvoidHSAncientBuildings');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseAvoidHSAncientBuildings',   'TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES',   'Buildings');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseAvoidHSAncientBuildings');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseAvoidHSAncientBuildings',   'BUILDING_STONEHENGE', 0, -100);
-
--- Avoid Early Holy Sites leaders: Stonehenge disfavored, Classical era; AGENTS.md "Stonehenge disfavored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseAvoidHSClassicalBuildings');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseAvoidHSClassicalBuildings', 'TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES',   'Buildings');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseAvoidHSClassicalBuildings');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseAvoidHSClassicalBuildings', 'BUILDING_STONEHENGE', 0, -100);
+('RoseReligiousBuildings', 'BUILDING_STONEHENGE', 1, 100);
 
 -- Naval-bias leaders: Harbor always favored (England and Dido have their
 -- unique district list instead); AGENTS.md "Naval bias trait created"
@@ -297,6 +227,14 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseCurtinDistricts',    'DISTRICT_PRESERVE', 1, 100);
 
+-- Maori (civilization trait, so any Maori leader): Preserve always favored; AGENTS.md "Maori Preserve favored"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseMaoriDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseMaoriDistricts',     'TRAIT_CIVILIZATION_MAORI_MANA',      'Districts');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseMaoriDistricts',     'DISTRICT_PRESERVE', 1, 100);
+
 -- Hammurabi: Theater Square always favored; AGENTS.md "Hammurabi Theater Square favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseHammurabiDistricts');
@@ -305,42 +243,18 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseHammurabiDistricts', 'DISTRICT_THEATER',  1, 100);
 
--- Bull Moose Roosevelt: Mysticism (needed for Preserves), Ancient era; AGENTS.md "Mysticism civic prioritized"
+-- Bull Moose Roosevelt: Mysticism (needed for Preserves) always favored (a Civics list has no effect on a strategy); AGENTS.md "Mysticism civic prioritized"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseRooseveltAncientCivics');
+('RoseRooseveltCivics');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseRooseveltAncientCivics',   'TRAIT_LEADER_ANTIQUES_AND_PARKS',    'Civics');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseRooseveltAncientCivics');
+('RoseRooseveltCivics', 'TRAIT_LEADER_ANTIQUES_AND_PARKS',   'Civics');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseRooseveltAncientCivics',   'CIVIC_MYSTICISM', 1, 100);
+('RoseRooseveltCivics', 'CIVIC_MYSTICISM', 1, 100);
 
--- Bull Moose Roosevelt: Mysticism, Classical era; AGENTS.md "Mysticism civic prioritized"
+-- John Curtin: Mysticism always favored; AGENTS.md "Mysticism civic prioritized"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseRooseveltClassicalCivics');
+('RoseCurtinCivics');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseRooseveltClassicalCivics', 'TRAIT_LEADER_ANTIQUES_AND_PARKS',    'Civics');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseRooseveltClassicalCivics');
+('RoseCurtinCivics',    'TRAIT_LEADER_CITADEL_CIVILIZATION', 'Civics');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseRooseveltClassicalCivics', 'CIVIC_MYSTICISM', 1, 100);
-
--- John Curtin: Mysticism, Ancient era; AGENTS.md "Mysticism civic prioritized"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseCurtinAncientCivics');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseCurtinAncientCivics',      'TRAIT_LEADER_CITADEL_CIVILIZATION',  'Civics');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',   'RoseCurtinAncientCivics');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseCurtinAncientCivics',      'CIVIC_MYSTICISM', 1, 100);
-
--- John Curtin: Mysticism, Classical era; AGENTS.md "Mysticism civic prioritized"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseCurtinClassicalCivics');
-INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseCurtinClassicalCivics',    'TRAIT_LEADER_CITADEL_CIVILIZATION',  'Civics');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES', 'RoseCurtinClassicalCivics');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseCurtinClassicalCivics',    'CIVIC_MYSTICISM', 1, 100);
+('RoseCurtinCivics',    'CIVIC_MYSTICISM', 1, 100);

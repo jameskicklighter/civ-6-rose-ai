@@ -1,6 +1,7 @@
 -- ============================================================================
--- Rose AI: generic yield and pseudoyield lists on the era strategies, the
--- cumulative era-onward strategies (Rose_Strategies.sql) and all majors.
+-- Rose AI: generic yield and pseudoyield lists on the Rose era window
+-- strategies, the cumulative era-onward strategies (Rose_Strategies.sql) and
+-- all majors.
 -- Values are percent changes of the defaults. Leader lists: Leaders/.
 -- AGENTS.md "## Current Features", "### economy/Rose_Yields.sql".
 -- ============================================================================
@@ -11,7 +12,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAncientYields',    'Yields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',      'RoseAncientYields');
+('STRATEGY_ROSE_ANCIENT_ERA',      'RoseAncientYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseAncientYields', 'YIELD_FOOD',       1, 25),
 ('RoseAncientYields', 'YIELD_PRODUCTION', 1, 25),
@@ -24,7 +25,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAncientPseudoYields',       'PseudoYields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',      'RoseAncientPseudoYields');
+('STRATEGY_ROSE_ANCIENT_ERA',      'RoseAncientPseudoYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseAncientPseudoYields', 'PSEUDOYIELD_GPP_MERCHANT',        1, 50),
 ('RoseAncientPseudoYields', 'PSEUDOYIELD_CITY_POPULATION',     1, 10);
@@ -35,7 +36,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseClassicalYields',  'Yields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES',    'RoseClassicalYields');
+('STRATEGY_ROSE_CLASSICAL_ERA',    'RoseClassicalYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseClassicalYields', 'YIELD_FOOD',       1, 25),
 ('RoseClassicalYields', 'YIELD_PRODUCTION', 1, 25),
@@ -48,7 +49,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseClassicalPseudoYields',     'PseudoYields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES',    'RoseClassicalPseudoYields');
+('STRATEGY_ROSE_CLASSICAL_ERA',    'RoseClassicalPseudoYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseClassicalPseudoYields', 'PSEUDOYIELD_GPP_MERCHANT',      1, 50),
 ('RoseClassicalPseudoYields', 'PSEUDOYIELD_CITY_POPULATION',   1, 10);
@@ -59,24 +60,26 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseMedievalYields',   'Yields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalYields');
+('STRATEGY_ROSE_MEDIEVAL_ERA',     'RoseMedievalYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseMedievalYields', 'YIELD_FOOD',       1, 25),
 ('RoseMedievalYields', 'YIELD_PRODUCTION', 1, 25);
 
--- Medieval pseudoyields: districts, population, Great Merchants and Engineers;
--- AGENTS.md "District pseudoyield increased", "Population priority boosted", "Great Engineer points boosted"
+-- Medieval pseudoyields: districts, population, Great Merchants and Engineers,
+-- improvements (Builder demand, with Serfdom's extra charges); AGENTS.md "District pseudoyield increased",
+-- "Population priority boosted", "Great Engineer points boosted", "Builders favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMedievalPseudoYields');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseMedievalPseudoYields',      'PseudoYields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalPseudoYields');
+('STRATEGY_ROSE_MEDIEVAL_ERA',     'RoseMedievalPseudoYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseMedievalPseudoYields', 'PSEUDOYIELD_DISTRICT',           1, 50),
 ('RoseMedievalPseudoYields', 'PSEUDOYIELD_CITY_POPULATION',    1, 50),
 ('RoseMedievalPseudoYields', 'PSEUDOYIELD_GPP_MERCHANT',       1, 50),
-('RoseMedievalPseudoYields', 'PSEUDOYIELD_GPP_ENGINEER',       1, 100);
+('RoseMedievalPseudoYields', 'PSEUDOYIELD_GPP_ENGINEER',       1, 100),
+('RoseMedievalPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',        1, 50);
 
 -- Renaissance yields: Food and Production; AGENTS.md "Growth-focused yield adjustments"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -84,20 +87,22 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseRenaissanceYields', 'Yields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceYields');
+('STRATEGY_ROSE_RENAISSANCE_ERA',  'RoseRenaissanceYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseRenaissanceYields', 'YIELD_FOOD',       1, 25),
 ('RoseRenaissanceYields', 'YIELD_PRODUCTION', 1, 25);
 
--- Renaissance pseudoyields: Great Engineers; AGENTS.md "Great Engineer points boosted"
+-- Renaissance pseudoyields: Great Engineers and improvements (Builder demand);
+-- AGENTS.md "Great Engineer points boosted", "Builders favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseRenaissancePseudoYields');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseRenaissancePseudoYields',   'PseudoYields');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissancePseudoYields');
+('STRATEGY_ROSE_RENAISSANCE_ERA',  'RoseRenaissancePseudoYields');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseRenaissancePseudoYields', 'PSEUDOYIELD_GPP_ENGINEER',    1, 100);
+('RoseRenaissancePseudoYields', 'PSEUDOYIELD_GPP_ENGINEER',    1, 100),
+('RoseRenaissancePseudoYields', 'PSEUDOYIELD_IMPROVEMENT',     1, 50);
 
 -- Renaissance onward: a target's defenses count less (the cuts add up with the
 -- later lists: -25, -40, -50) and Great Scientist points; AGENTS.md "Late-era offense",

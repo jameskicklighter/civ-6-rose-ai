@@ -157,29 +157,6 @@ SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId,
        'ROSE_CHOICE_REQ_DISTRICT_' || BiasId || '_' || DistrictType
 FROM RoseChoiceResolvedDistricts;
 
--- Marker gates of the two envoy beliefs: the marker AND the Palace in the
--- same city (eligibility from the marker, one city from the Palace);
--- AGENTS.md "Crusade", "Defender of the Faith"
-INSERT INTO RequirementSets (RequirementSetId, RequirementSetType)
-SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'REQUIREMENTSET_TEST_ALL'
-FROM RoseChoiceBiases WHERE GateType IN ('MILITARY_MARKER', 'WAR_MARKER');
-INSERT INTO Requirements (RequirementId, RequirementType) VALUES
-('ROSE_CHOICE_REQ_MILITARY_MARKER', 'REQUIREMENT_CITY_HAS_BUILDING'),
-('ROSE_CHOICE_REQ_WAR_MARKER', 'REQUIREMENT_CITY_HAS_BUILDING'),
-('ROSE_CHOICE_REQ_PALACE', 'REQUIREMENT_CITY_HAS_BUILDING');
-INSERT INTO RequirementArguments (RequirementId, Name, Value) VALUES
-('ROSE_CHOICE_REQ_MILITARY_MARKER', 'BuildingType', 'BUILDING_ROSE_MILITARY_CHOICE_MARKER'),
-('ROSE_CHOICE_REQ_WAR_MARKER', 'BuildingType', 'BUILDING_ROSE_WAR_CHOICE_MARKER'),
-('ROSE_CHOICE_REQ_PALACE', 'BuildingType', 'BUILDING_PALACE');
-INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId)
-SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId,
-       CASE WHEN GateType = 'MILITARY_MARKER' THEN 'ROSE_CHOICE_REQ_MILITARY_MARKER'
-            ELSE 'ROSE_CHOICE_REQ_WAR_MARKER' END
-FROM RoseChoiceBiases WHERE GateType IN ('MILITARY_MARKER', 'WAR_MARKER')
-UNION ALL
-SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'ROSE_CHOICE_REQ_PALACE'
-FROM RoseChoiceBiases WHERE GateType IN ('MILITARY_MARKER', 'WAR_MARKER');
-
 -- Government owner eligibility (founder, non-founder, leader trait), kept
 -- although the scorer skips owner requirements; AGENTS.md "Government signals unchanged"
 INSERT INTO Requirements (RequirementId, RequirementType, Inverse)
@@ -195,8 +172,8 @@ INSERT INTO RequirementArguments (RequirementId, Name, Value)
 SELECT 'ROSE_CHOICE_REQ_GATE_' || BiasId, 'TraitType', GateValue
 FROM RoseChoiceBiases WHERE GateType = 'LEADER_TRAIT';
 
--- Owner sets: AI only, the eligibility above, and for yield and city envoy
--- signals both having and lacking Future Civic (TEST_ALL: no player passes);
+-- Owner sets: AI only, the eligibility above, and for yield signals both
+-- having and lacking Future Civic (TEST_ALL: no player passes);
 -- AGENTS.md "Inactive preference signals"
 INSERT INTO Requirements (RequirementId, RequirementType, Inverse) VALUES
 ('ROSE_CHOICE_REQ_AI', 'REQUIREMENT_PLAYER_IS_HUMAN', 1),
@@ -217,12 +194,12 @@ SELECT 'ROSE_CHOICE_OWNER_' || BiasId, 'ROSE_CHOICE_REQ_GATE_' || BiasId
 FROM RoseChoiceBiases WHERE GateType IN ('FOUNDER', 'NON_FOUNDER', 'LEADER_TRAIT')
 UNION ALL
 SELECT 'ROSE_CHOICE_OWNER_' || BiasId, 'ROSE_CHOICE_HAS_FUTURE_CIVIC'
-FROM RoseChoiceBiases WHERE YieldType IS NOT NULL OR GateType IN ('MILITARY_MARKER', 'WAR_MARKER')
+FROM RoseChoiceBiases WHERE YieldType IS NOT NULL
 UNION ALL
 SELECT 'ROSE_CHOICE_OWNER_' || BiasId, 'ROSE_CHOICE_LACKS_FUTURE_CIVIC'
-FROM RoseChoiceBiases WHERE YieldType IS NOT NULL OR GateType IN ('MILITARY_MARKER', 'WAR_MARKER');
+FROM RoseChoiceBiases WHERE YieldType IS NOT NULL;
 
--- The same contradiction as a subject set for the other envoy signals, whose
+-- The same contradiction as a subject set for the envoy signals, whose
 -- impossible gate sits on the subject (PLAYER_HAS_CIVIC is unregistered in the
 -- scorer, so it still scores them); AGENTS.md "Government signals unchanged"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType) VALUES
@@ -241,11 +218,10 @@ FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE');
 -- government or belief; AGENTS.md "Inactive choice registry"
 INSERT INTO Modifiers (ModifierId, ModifierType, OwnerRequirementSetId, SubjectRequirementSetId)
 SELECT BiasId,
-       CASE WHEN GateType IN ('MILITARY_MARKER', 'WAR_MARKER') THEN 'MODIFIER_ROSE_CITIES_INACTIVE_ENVOY'
-            WHEN YieldType IS NOT NULL THEN 'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE'
+       CASE WHEN YieldType IS NOT NULL THEN 'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE'
             ELSE 'MODIFIER_PLAYER_ADJUST_DUPLICATE_FIRST_INFLUENCE_TOKEN' END,
        'ROSE_CHOICE_OWNER_' || BiasId,
-       CASE WHEN GateType IN ('ADJACENCY', 'HOLY_SITE', 'MILITARY_MARKER', 'WAR_MARKER') THEN 'ROSE_CHOICE_CITY_GATE_' || BiasId
+       CASE WHEN GateType IN ('ADJACENCY', 'HOLY_SITE') THEN 'ROSE_CHOICE_CITY_GATE_' || BiasId
             ELSE 'ROSE_CHOICE_NEVER_ACTIVE' END
 FROM RoseChoiceBiases;
 

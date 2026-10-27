@@ -18,8 +18,8 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAncientDistricts',      'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_ANCIENT_ERA',      'RoseAncientDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseAncientDistricts',    'DISTRICT_COMMERCIAL_HUB',  1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseAncientDistricts',    'DISTRICT_COMMERCIAL_HUB',  1);
 
 -- Classical: Commercial Hub; AGENTS.md "Commercial Hub district favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -28,8 +28,8 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseClassicalDistricts',    'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_CLASSICAL_ERA',    'RoseClassicalDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseClassicalDistricts',  'DISTRICT_COMMERCIAL_HUB',  1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseClassicalDistricts',  'DISTRICT_COMMERCIAL_HUB',  1);
 
 -- Medieval: Commercial Hub and Industrial Zone; AGENTS.md "Commercial Hub district favored", "Industrial Zone favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -38,9 +38,9 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseMedievalDistricts',     'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_MEDIEVAL_ERA',     'RoseMedievalDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMedievalDistricts',   'DISTRICT_COMMERCIAL_HUB',  1, 100),
-('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseMedievalDistricts',   'DISTRICT_COMMERCIAL_HUB',  1),
+('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1);
 
 -- Renaissance: Industrial Zone; AGENTS.md "Industrial Zone favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -49,8 +49,8 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseRenaissanceDistricts',  'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_RENAISSANCE_ERA',  'RoseRenaissanceDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1);
 
 -- Renaissance onward: Campus, level with the other favored districts;
 -- AGENTS.md "Campus from the Renaissance era"
@@ -60,8 +60,8 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseRenaissanceOnwardDistricts', 'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'RoseRenaissanceOnwardDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseRenaissanceOnwardDistricts', 'DISTRICT_CAMPUS',     1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseRenaissanceOnwardDistricts', 'DISTRICT_CAMPUS',     1);
 
 -- Modern onward: Aerodrome (no base list favors it); AGENTS.md "Aerodrome from the Modern era"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -70,17 +70,17 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseModernOnwardDistricts', 'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_MODERN_ONWARD',   'RoseModernOnwardDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseModernOnwardDistricts', 'DISTRICT_AERODROME',       1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseModernOnwardDistricts', 'DISTRICT_AERODROME',       1);
 
 -- All majors, all eras: Government Plaza and Aqueduct; AGENTS.md "Government Plaza always favored", "Aqueducts always favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivDistricts', 'TRAIT_LEADER_MAJOR_CIV', 'Districts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMajorCivDistricts', 'DISTRICT_GOVERNMENT', 1, 999),
-('RoseMajorCivDistricts', 'DISTRICT_AQUEDUCT',   1, 50);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseMajorCivDistricts', 'DISTRICT_GOVERNMENT', 1),
+('RoseMajorCivDistricts', 'DISTRICT_AQUEDUCT',   1);
 
 -- The Preserve takes a specialty-district slot but is priced like an Aqueduct;
 -- give it the specialty-district cost model and discount (all players);
@@ -96,8 +96,8 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivBuildings');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivBuildings', 'TRAIT_LEADER_MAJOR_CIV', 'Buildings');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value)
-SELECT 'RoseMajorCivBuildings', BuildingType, 1, 50
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored)
+SELECT 'RoseMajorCivBuildings', BuildingType, 1
 FROM Buildings
 WHERE BuildingType IN ('BUILDING_GROVE', 'BUILDING_SANCTUARY');
 
@@ -138,19 +138,19 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseVietnamDistricts',    'TRAIT_CIVILIZATION_DISTRICT_THANH',       'Districts'),
 ('RoseMayaDistricts',       'TRAIT_CIVILIZATION_DISTRICT_OBSERVATORY', 'Districts');
 
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseGreeceDistricts',     'DISTRICT_ACROPOLIS',           1, 100),
-('RoseRomeDistricts',       'DISTRICT_BATH',                1, 100),
-('RoseGermanyDistricts',    'DISTRICT_HANSA',               1, 100),
-('RoseRussiaDistricts',     'DISTRICT_LAVRA',               1, 100),
-('RoseKongoDistricts',      'DISTRICT_MBANZA',              1, 100),
-('RoseBrazilDistricts',     'DISTRICT_STREET_CARNIVAL',     1, 100),
-('RoseEnglandDistricts',    'DISTRICT_ROYAL_NAVY_DOCKYARD', 1, 100),
-('RoseKoreaDistricts',      'DISTRICT_SEOWON',              1, 100),
-('RoseZuluDistricts',       'DISTRICT_IKANDA',              1, 100),
-('RosePhoeniciaDistricts',  'DISTRICT_COTHON',              1, 100),
-('RoseMaliDistricts',       'DISTRICT_SUGUBA',              1, 100),
-('RoseByzantiumDistricts',  'DISTRICT_HIPPODROME',          1, 100),
-('RoseGaulDistricts',       'DISTRICT_OPPIDUM',             1, 100),
-('RoseVietnamDistricts',    'DISTRICT_THANH',               1, 100),
-('RoseMayaDistricts',       'DISTRICT_OBSERVATORY',         1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseGreeceDistricts',     'DISTRICT_ACROPOLIS',           1),
+('RoseRomeDistricts',       'DISTRICT_BATH',                1),
+('RoseGermanyDistricts',    'DISTRICT_HANSA',               1),
+('RoseRussiaDistricts',     'DISTRICT_LAVRA',               1),
+('RoseKongoDistricts',      'DISTRICT_MBANZA',              1),
+('RoseBrazilDistricts',     'DISTRICT_STREET_CARNIVAL',     1),
+('RoseEnglandDistricts',    'DISTRICT_ROYAL_NAVY_DOCKYARD', 1),
+('RoseKoreaDistricts',      'DISTRICT_SEOWON',              1),
+('RoseZuluDistricts',       'DISTRICT_IKANDA',              1),
+('RosePhoeniciaDistricts',  'DISTRICT_COTHON',              1),
+('RoseMaliDistricts',       'DISTRICT_SUGUBA',              1),
+('RoseByzantiumDistricts',  'DISTRICT_HIPPODROME',          1),
+('RoseGaulDistricts',       'DISTRICT_OPPIDUM',             1),
+('RoseVietnamDistricts',    'DISTRICT_THANH',               1),
+('RoseMayaDistricts',       'DISTRICT_OBSERVATORY',         1);

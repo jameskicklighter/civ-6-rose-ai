@@ -13,9 +13,9 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivTechs');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivTechs', 'TRAIT_LEADER_MAJOR_CIV', 'Technologies');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMajorCivTechs', 'TECH_CURRENCY',    1, 100),
-('RoseMajorCivTechs', 'TECH_ENGINEERING', 1, 50);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseMajorCivTechs', 'TECH_CURRENCY',    1),
+('RoseMajorCivTechs', 'TECH_ENGINEERING', 1);
 
 -- All majors, all eras: Political Philosophy (tier 1 governments) and Feudalism
 -- (Serfdom, +2 Builder charges); the Lua grant gives the later government civics;
@@ -24,13 +24,14 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivCivics');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivCivics', 'TRAIT_LEADER_MAJOR_CIV', 'Civics');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMajorCivCivics', 'CIVIC_POLITICAL_PHILOSOPHY', 1, 100),
-('RoseMajorCivCivics', 'CIVIC_FEUDALISM',            1, 100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseMajorCivCivics', 'CIVIC_POLITICAL_PHILOSOPHY', 1),
+('RoseMajorCivCivics', 'CIVIC_FEUDALISM',            1);
 
--- All majors: the religious dedication (Golden Age Great Prophet points)
--- disfavored, and the religious victory strategy's favor of it removed so the
--- two cannot cancel; AGENTS.md "Religious dedication disfavored"
+-- All majors: the religious victory strategy's favor of the religious
+-- dedication (Golden Age Great Prophet points) removed, so no AI is steered to
+-- it; the disfavor row is kept; inert while no other list favors it (a
+-- dedication disfavor only cancels a favor); AGENTS.md "Religious dedication disfavored"
 DELETE FROM AiFavoredItems
 WHERE ListType = 'ReligiousVictoryFavoredCommemorations'
   AND Item = 'COMMEMORATION_RELIGIOUS';
@@ -38,5 +39,5 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivCommemorations');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivCommemorations', 'TRAIT_LEADER_MAJOR_CIV', 'Commemorations');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMajorCivCommemorations', 'COMMEMORATION_RELIGIOUS', 0, -100);
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseMajorCivCommemorations', 'COMMEMORATION_RELIGIOUS', 0);

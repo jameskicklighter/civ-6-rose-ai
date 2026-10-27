@@ -165,9 +165,9 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_AUSTERITY',        'RoseAusterityDistricts');
 INSERT OR REPLACE INTO AiFavoredItems
-    (ListType, Item, Favored, Value) VALUES
-('RoseAusterityDistricts',         'DISTRICT_COMMERCIAL_HUB',          1,  50),
-('RoseAusterityDistricts',         'DISTRICT_HARBOR',                  1,  50);
+    (ListType, Item, Favored) VALUES
+('RoseAusterityDistricts',         'DISTRICT_COMMERCIAL_HUB',          1),
+('RoseAusterityDistricts',         'DISTRICT_HARBOR',                  1);
 
 -- Austerity At War: trims part of At War's extra unit demand (it stays above
 -- base); AGENTS.md "STRATEGY_ROSE_AUSTERITY / _AT_WAR"

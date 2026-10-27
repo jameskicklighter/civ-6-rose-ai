@@ -1,7 +1,7 @@
 -- ============================================================================
--- Rose AI: generic district priorities on the era strategies, the era-onward
--- strategies (Rose_Strategies.sql), all majors and each civilization's unique
--- district. Leader-specific districts: Leaders/Rose_Leader_Lists.sql.
+-- Rose AI: generic district priorities on the Rose era window strategies, the
+-- era-onward strategies (Rose_Strategies.sql), all majors and each
+-- civilization's unique district. Leader-specific districts: Leaders/Rose_Leader_Lists.sql.
 -- AGENTS.md "## Current Features", "### economy/Rose_Districts.sql".
 -- ============================================================================
 
@@ -17,7 +17,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseAncientDistricts',      'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ANCIENT_CHANGES',      'RoseAncientDistricts');
+('STRATEGY_ROSE_ANCIENT_ERA',      'RoseAncientDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseAncientDistricts',    'DISTRICT_COMMERCIAL_HUB',  1, 100);
 
@@ -27,7 +27,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseClassicalDistricts',    'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_CLASSICAL_CHANGES',    'RoseClassicalDistricts');
+('STRATEGY_ROSE_CLASSICAL_ERA',    'RoseClassicalDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseClassicalDistricts',  'DISTRICT_COMMERCIAL_HUB',  1, 100);
 
@@ -37,7 +37,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseMedievalDistricts',     'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalDistricts');
+('STRATEGY_ROSE_MEDIEVAL_ERA',     'RoseMedievalDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseMedievalDistricts',   'DISTRICT_COMMERCIAL_HUB',  1, 100),
 ('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1, 100);
@@ -48,7 +48,7 @@ INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 ('RoseRenaissanceDistricts',  'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceDistricts');
+('STRATEGY_ROSE_RENAISSANCE_ERA',  'RoseRenaissanceDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1, 100);
 
@@ -81,6 +81,25 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseMajorCivDistricts', 'DISTRICT_GOVERNMENT', 1, 999),
 ('RoseMajorCivDistricts', 'DISTRICT_AQUEDUCT',   1, 50);
+
+-- The Preserve takes a specialty-district slot but is priced like an Aqueduct;
+-- give it the specialty-district cost model and discount (all players);
+-- AGENTS.md "Preserve priced as a specialty district"
+UPDATE Districts
+SET CostProgressionModel = 'COST_PROGRESSION_NUM_UNDER_AVG_PLUS_TECH',
+    CostProgressionParam1 = 40
+WHERE DistrictType = 'DISTRICT_PRESERVE';
+
+-- All majors, all eras: Grove and Sanctuary, which no base list favors, so
+-- built Preserves are not left empty; AGENTS.md "Preserve buildings favored"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseMajorCivBuildings');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseMajorCivBuildings', 'TRAIT_LEADER_MAJOR_CIV', 'Buildings');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value)
+SELECT 'RoseMajorCivBuildings', BuildingType, 1, 50
+FROM Buildings
+WHERE BuildingType IN ('BUILDING_GROVE', 'BUILDING_SANCTUARY');
 
 -- Each civilization's unique district, always favored: one list per civ,
 -- since a ListType maps to one LeaderType (trait) in AiLists;

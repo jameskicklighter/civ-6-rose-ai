@@ -16,6 +16,8 @@
         <LoadOrder>600</LoadOrder>
       </Properties>
       <!-- The game loads these by Priority, highest first (then by path), whatever their order here. -->
+      <File Priority="22">core/fixes/Rose_AI_List_Fixes.sql</File>
+      <File Priority="21">core/fixes/Rose_Gameplay_Fixes.sql</File>
       <File Priority="20">core/military/Rose_Operation_Roles.sql</File>
       <File Priority="19">core/military/Operations.xml</File>
       <File Priority="18">core/military/trees/Simple_Operation_Attack.xml</File>
@@ -56,13 +58,14 @@
     </AddUserInterfaces>
 
     <AddGameplayScripts id="ROSE_AI_SCRIPTS">
-      <File>core/scripts/Rose_AI_ChoiceMarkers.lua</File>
       <File>core/scripts/Rose_AI_Gameplay.lua</File>
     </AddGameplayScripts>
 
   </InGameActions>
 
   <Files>
+    <File>core/fixes/Rose_AI_List_Fixes.sql</File>
+    <File>core/fixes/Rose_Gameplay_Fixes.sql</File>
     <File>core/strategies/Rose_Strategies.sql</File>
     <File>core/strategies/Rose_Strategy_Lists.sql</File>
     <File>core/leaders/Rose_Leader_Traits.sql</File>
@@ -91,7 +94,6 @@
     <File>core/scripts/Rose_AI_Nuclear.lua</File>
     <File>core/scripts/Rose_AI_Director.lua</File>
     <File>core/scripts/Rose_AI_Diagnostics.lua</File>
-    <File>core/scripts/Rose_AI_ChoiceMarkers.lua</File>
     <File>core/scripts/Rose_AI_InGame.lua</File>
     <File>core/scripts/Rose_AI_InGame.xml</File>
   </Files>

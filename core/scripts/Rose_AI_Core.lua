@@ -72,6 +72,54 @@ local function IsUnitUncommitted(pUnit)
 		or sOperationName == "-1";
 end
 
+-- Whether the player's leader has any of tTraits (a list of TraitType strings),
+-- following Leaders.InheritFrom as the engine's AI-list query does. Built once
+-- from static data, so every machine gives the same answer.
+local tTraitsByLeader = nil;
+local function PlayerHasLeaderTrait(iPlayerID, tTraits)
+	if tTraitsByLeader == nil then
+		tTraitsByLeader = {};
+		for row in GameInfo.LeaderTraits() do
+			local tSet = tTraitsByLeader[row.LeaderType] or {};
+			tSet[row.TraitType] = true;
+			tTraitsByLeader[row.LeaderType] = tSet;
+		end
+	end
+	local pConfig = PlayerConfigurations[iPlayerID];
+	if pConfig == nil then return false; end
+	local sLeaderType = pConfig:GetLeaderTypeName();
+	local tSeen = {};
+	while sLeaderType ~= nil and not tSeen[sLeaderType] do
+		local tSet = tTraitsByLeader[sLeaderType];
+		if tSet ~= nil then
+			for _, sTrait in ipairs(tTraits) do
+				if tSet[sTrait] then return true; end
+			end
+		end
+		tSeen[sLeaderType] = true;
+		local kLeader = GameInfo.Leaders[sLeaderType];
+		sLeaderType = kLeader ~= nil and kLeader.InheritFrom or nil;
+	end
+	return false;
+end
+
+-- The player's era index (the base era strategies switch per player); the
+-- world era if Player:GetEra is unavailable. Prints the source when it changes.
+local sEraSource = nil;
+local function GetPlayerEraIndex(pPlayer)
+	local bOk, iEra = pcall(function() return pPlayer:GetEra(); end);
+	local sSource = "player";
+	if not bOk or type(iEra) ~= "number" then
+		iEra = Game.GetEras():GetCurrentEra();
+		sSource = "world";
+	end
+	if sEraSource ~= sSource then
+		sEraSource = sSource;
+		print("Rose AI: era windows read the " .. sSource .. " era");
+	end
+	return iEra;
+end
+
 -- ============================================================================
 -- Error guard and change reports
 -- ============================================================================
@@ -501,6 +549,8 @@ RoseMod.GetMajorsAtWar = GetMajorsAtWar;
 RoseMod.GetUnitInfo = GetUnitInfo;
 RoseMod.GetUnitOperationName = GetUnitOperationName;
 RoseMod.IsUnitUncommitted = IsUnitUncommitted;
+RoseMod.PlayerHasLeaderTrait = PlayerHasLeaderTrait;
+RoseMod.GetPlayerEraIndex = GetPlayerEraIndex;
 RoseMod.Guard = Guard;
 RoseMod.NewReasonReporter = NewReasonReporter;
 RoseMod.Codec = Codec;

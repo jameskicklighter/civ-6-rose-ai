@@ -80,18 +80,6 @@ INSERT OR REPLACE INTO AiFavoredItems
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',              1, -50),
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_WONDER',                   1, -25);
 
--- Military Recovery: Grand Master's Chapel, so Faith can buy land units;
--- AGENTS.md "STRATEGY_ROSE_MILITARY_RECOVERY"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseMilitaryRecoveryBuildings');
-INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseMilitaryRecoveryBuildings',      'Buildings');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_MILITARY_RECOVERY', 'RoseMilitaryRecoveryBuildings');
-INSERT OR REPLACE INTO AiFavoredItems
-    (ListType, Item, Favored, Value) VALUES
-('RoseMilitaryRecoveryBuildings',    'BUILDING_GOV_FAITH',                   1, 100);
-
 -- The lists below keep the order they always loaded in: the engine reads the
 -- lists of one system (Diplomatic actions, operation slots) in database order.
 

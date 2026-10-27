@@ -5,7 +5,8 @@
 -- AGENTS.md "## Current Features", "### strategies/ (Rose_Strategies.sql, Rose_Strategy_Lists.sql)".
 -- ============================================================================
 
--- Information era strategy, which the base game omits; AGENTS.md "STRATEGY_INFORMATION_CHANGES"
+-- Information era strategy, which the base game omits; kept; inert while no
+-- list is attached to it; AGENTS.md "STRATEGY_INFORMATION_CHANGES"
 INSERT OR IGNORE INTO Types (Type, Kind) VALUES
 ('STRATEGY_INFORMATION_CHANGES', 'KIND_VICTORY_STRATEGY');
 
@@ -18,9 +19,9 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, Disqu
 INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction) VALUES
 ('STRATEGY_INFORMATION_CHANGES', 'Is Information');
 
--- Cumulative "this era or later" strategies: ThresholdValue 1 on an era
--- condition means this era or later, so once adopted they never end and their
--- lists add up; AGENTS.md 'Cumulative "era or later" strategies'
+-- Cumulative "this era or later" strategies: an era condition never turns
+-- false once reached, so once adopted they never end and their lists add up;
+-- AGENTS.md 'Cumulative "era or later" strategies'
 INSERT OR IGNORE INTO Types (Type, Kind) VALUES
 ('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'KIND_VICTORY_STRATEGY'),
 ('STRATEGY_ROSE_INDUSTRIAL_ONWARD',  'KIND_VICTORY_STRATEGY'),
@@ -91,3 +92,57 @@ INSERT OR IGNORE INTO StrategyConditions
     (StrategyType, ConditionFunction, StringValue, ThresholdValue, Forbidden) VALUES
 ('STRATEGY_ROSE_AUSTERITY',        'Call Lua Function', 'RoseForbidStrategyAusterity',      30, 1),
 ('STRATEGY_ROSE_AUSTERITY_AT_WAR', 'Call Lua Function', 'RoseForbidStrategyAusterityAtWar', 30, 1);
+
+-- "This era only" windows: the base era strategies never end, so per-era lists
+-- go here; same Forbidden layout, the Lua check reads the player's era;
+-- AGENTS.md "Era window strategies"
+INSERT OR IGNORE INTO Types (Type, Kind) VALUES
+('STRATEGY_ROSE_ANCIENT_ERA',     'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_CLASSICAL_ERA',   'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_MEDIEVAL_ERA',    'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_RENAISSANCE_ERA', 'KIND_VICTORY_STRATEGY');
+
+INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
+('STRATEGY_ROSE_ANCIENT_ERA',     0),
+('STRATEGY_ROSE_CLASSICAL_ERA',   0),
+('STRATEGY_ROSE_MEDIEVAL_ERA',    0),
+('STRATEGY_ROSE_RENAISSANCE_ERA', 0);
+
+INSERT OR IGNORE INTO StrategyConditions
+    (StrategyType, ConditionFunction, Disqualifier) VALUES
+('STRATEGY_ROSE_ANCIENT_ERA',     'Is Not Major', 1),
+('STRATEGY_ROSE_CLASSICAL_ERA',   'Is Not Major', 1),
+('STRATEGY_ROSE_MEDIEVAL_ERA',    'Is Not Major', 1),
+('STRATEGY_ROSE_RENAISSANCE_ERA', 'Is Not Major', 1);
+
+INSERT OR IGNORE INTO StrategyConditions
+    (StrategyType, ConditionFunction, StringValue, ThresholdValue, Forbidden) VALUES
+('STRATEGY_ROSE_ANCIENT_ERA',     'Call Lua Function', 'RoseForbidStrategyAncientEra',     0, 1),
+('STRATEGY_ROSE_CLASSICAL_ERA',   'Call Lua Function', 'RoseForbidStrategyClassicalEra',   0, 1),
+('STRATEGY_ROSE_MEDIEVAL_ERA',    'Call Lua Function', 'RoseForbidStrategyMedievalEra',    0, 1),
+('STRATEGY_ROSE_RENAISSANCE_ERA', 'Call Lua Function', 'RoseForbidStrategyRenaissanceEra', 0, 1);
+
+-- Leader windows: a trait and an era range together, which no list can express
+-- (a strategy's lists reach every player, a trait's lists every era); same
+-- layout; AGENTS.md "Leader era window strategies"
+INSERT OR IGNORE INTO Types (Type, Kind) VALUES
+('STRATEGY_ROSE_RELIGIOUS_EARLY',        'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_SALADIN_HOLY_SITE',      'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_AVOID_HOLY_SITES_EARLY', 'KIND_VICTORY_STRATEGY');
+
+INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
+('STRATEGY_ROSE_RELIGIOUS_EARLY',        0),
+('STRATEGY_ROSE_SALADIN_HOLY_SITE',      0),
+('STRATEGY_ROSE_AVOID_HOLY_SITES_EARLY', 0);
+
+INSERT OR IGNORE INTO StrategyConditions
+    (StrategyType, ConditionFunction, Disqualifier) VALUES
+('STRATEGY_ROSE_RELIGIOUS_EARLY',        'Is Not Major', 1),
+('STRATEGY_ROSE_SALADIN_HOLY_SITE',      'Is Not Major', 1),
+('STRATEGY_ROSE_AVOID_HOLY_SITES_EARLY', 'Is Not Major', 1);
+
+INSERT OR IGNORE INTO StrategyConditions
+    (StrategyType, ConditionFunction, StringValue, ThresholdValue, Forbidden) VALUES
+('STRATEGY_ROSE_RELIGIOUS_EARLY',        'Call Lua Function', 'RoseForbidStrategyReligiousEarly',      0, 1),
+('STRATEGY_ROSE_SALADIN_HOLY_SITE',      'Call Lua Function', 'RoseForbidStrategySaladinHolySite',     0, 1),
+('STRATEGY_ROSE_AVOID_HOLY_SITES_EARLY', 'Call Lua Function', 'RoseForbidStrategyAvoidHolySitesEarly', 0, 1);

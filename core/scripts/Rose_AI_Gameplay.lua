@@ -26,6 +26,13 @@ RegisterForbidCallback("RoseForbidStrategyMilitaryRecovery");
 RegisterForbidCallback("RoseForbidStrategyWarAdvantage");
 RegisterForbidCallback("RoseForbidStrategyAusterity");
 RegisterForbidCallback("RoseForbidStrategyAusterityAtWar");
+RegisterForbidCallback("RoseForbidStrategyAncientEra");
+RegisterForbidCallback("RoseForbidStrategyClassicalEra");
+RegisterForbidCallback("RoseForbidStrategyMedievalEra");
+RegisterForbidCallback("RoseForbidStrategyRenaissanceEra");
+RegisterForbidCallback("RoseForbidStrategyReligiousEarly");
+RegisterForbidCallback("RoseForbidStrategySaladinHolySite");
+RegisterForbidCallback("RoseForbidStrategyAvoidHolySitesEarly");
 
 -- The one table the modules share; everything else stays local to its file.
 -- Rose_AI_Strategies fills tForbidStrategy once its checks have loaded.

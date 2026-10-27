@@ -16,11 +16,12 @@ Most changes are AI preference weights: they make an option more or less attract
 
 ### Economy and development
 
-- Food and Production weighted up from the Ancient to the Renaissance era, with some early Culture and less early Science.
+- Food and Production weighted up from the Ancient to the Renaissance era, with some early Culture and less early Science. Each era's weights apply only while the AI is in that era.
 - Higher priority for population, Traders (always), Great Merchants, Great Engineers and Medieval districts.
 - Favored districts: Commercial Hubs (Ancient to Medieval), Industrial Zones (Medieval and Renaissance), Government Plazas and Aqueducts (always), 15 civilizations' unique districts (always), Campuses from the Renaissance (with Great Scientist points and Science), and Aerodromes from the Modern era (with air units).
-- Technology and civic priorities: Currency, Engineering (the first siege units), Feudalism, Political Philosophy and the civics that unlock Tier 2 to Tier 4 governments.
-- Builders favored in the Medieval and Renaissance eras.
+- Technology and civic priorities: Currency, Engineering (the first siege units), Feudalism and Political Philosophy; the later government civics come from the civic grants below.
+- The religious dedication (Golden Age Great Prophet points) is disfavored for every AI.
+- Improvements (and so Builders) valued more in the Medieval and Renaissance eras.
 
 ### Civics and policy cards
 
@@ -72,10 +73,10 @@ The base game's nuclear operation could not order or keep a delivery unit, so th
 
 ### Leaders
 
-- Curated religious and low-religion leader groups; leaders who should not spend an early district slot on religion avoid early Holy Sites and Stonehenge, while religious leaders favor early Holy Sites and Great Prophets (both Saladin versions have their own tuning).
+- Curated religious and low-religion leader groups; leaders who should not spend an early district slot on religion avoid early Holy Sites and Stonehenge, while religious leaders favor early Holy Sites, Great Prophets and Stonehenge (both Saladin versions have their own tuning).
 - Harbors for selected naval leaders, native coastal raids for original Harald, cavalry and Holy War for Basil II, and expansionist settling for Victoria and Philip II.
 - Aggressive military leaders favor formal and surprise wars, value friendships less, and favor the Grand Master's Chapel (Faith purchases of land units).
-- Preserves and Mysticism for Bull Moose Roosevelt and John Curtin, Theater Squares for Hammurabi.
+- Preserves and Mysticism for Bull Moose Roosevelt and John Curtin, Preserves for the Maori, Theater Squares for Hammurabi.
 
 ### Choice signals
 
@@ -83,10 +84,25 @@ Some policy cards, beliefs and governments carry extra modifiers that the AI's c
 
 - **Adjacency cards** (Natural Philosophy, Scripture, Aesthetics, Town Charters, Naval Infrastructure, Craftsmen, Five-Year Plan, Economic Union) score +5 of their yield per point of the matching district's adjacency in each city, up to 10 points.
 - **Follower beliefs** (Work Ethic, Jesuit Education, Choral Music, Feed the World, Zen Meditation, Religious Community) score a small yield per city with a Holy Site (Work Ethic: one with +3 adjacency or more).
-- **Crusade** scores only for aggressive military leaders and **Defender of the Faith** only while the AI is at war with another major civilization. Hidden marker buildings with no effects tell the scorer which AIs qualify.
 - Nine governments and Serfdom and Public Works carry a small envoy signal.
 
 The native effects of these cards, beliefs and governments are unchanged.
+
+## Base-game fixes
+
+Rose repairs some base-game data. Most of it is AI-only: misspelled entries and lists attached to the wrong leader or agenda, so preferences the base game wrote for Gorgo, Cyrus, Sundiata Keita, Ramses, Theodora, Suleiman, Nzinga, Pericles and others now reach them.
+
+A few bug fixes change rules for every player, human and AI:
+
+- Matterhorn's Alpine Training also reaches War-Carts and Warrior Monks.
+- Hagia Sophia's extra charges apply only to Missionaries and Apostles.
+- Strategic Air Force applies to all planes and carriers, not only Information-era ones.
+- Great General and Admiral auras reach all-era units such as the Nihang and Warrior Monk.
+- Arrow Storm and Urban Raider no longer apply against districts.
+- Babylon's Great Works of art and writing yield like the others.
+- Ibn Khaldun's Happy and Ecstatic bonuses match their description.
+
+These overlap Infixo's Real Fixes, which can be enabled alongside Rose.
 
 ## AI-only bonuses
 
@@ -123,7 +139,7 @@ core/
   economy/                     Tech, civic, yield, district and unit priorities; AI-only bonuses
   choices/                     Belief, policy-card and government choice signals
   military/                    Operation roles, slots and teams; trees/ holds one behavior tree per file
-  scripts/                     Gameplay Lua (entry script and modules), choice markers, InGame bridge
+  scripts/                     Gameplay Lua (entry script and modules), InGame bridge
 ```
 
 Rose AI is under active development. Judge its effects over several games and seeds: Civ VI's AI choices are situational and probabilistic.

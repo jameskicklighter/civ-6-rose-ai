@@ -4,26 +4,6 @@
 -- AGENTS.md "## Current Features", "### economy/Rose_Units.sql".
 -- ============================================================================
 
--- Medieval: Builders, with Serfdom's extra charges; AGENTS.md "Builders favored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseMedievalUnits');
-INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseMedievalUnits',     'Units');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_MEDIEVAL_CHANGES',     'RoseMedievalUnits');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseMedievalUnits',     'UNIT_BUILDER', 1, 100);
-
--- Renaissance: Builders; AGENTS.md "Builders favored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseRenaissanceUnits');
-INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseRenaissanceUnits',  'Units');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_RENAISSANCE_CHANGES',  'RoseRenaissanceUnits');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
-('RoseRenaissanceUnits',  'UNIT_BUILDER', 1, 100);
-
 -- +5 combat strength against barbarians for AI majors; AGENTS.md "Anti-barbarian combat bonus"
 INSERT OR IGNORE INTO TraitModifiers (TraitType, ModifierId) VALUES
 ('TRAIT_LEADER_MAJOR_CIV', 'ROSE_BARB_COMBAT_AI');

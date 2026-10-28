@@ -37,7 +37,7 @@ Most changes are AI preference weights: they make an option more or less attract
 Rose adds strategies for wars against other major civilizations, plus an austerity mode:
 
 - **At War:** more Production, Gold and army, naval units and replacements; less demand for optional districts, improvements and wonders; enemy cities valued more as targets. While it lasts, the AI starts no new wars on city-states and no planned attacks (a Military Victory AI keeps one), and is willing to use nuclear weapons.
-- **Military Recovery:** while the AI's military strength is below 70% of its combined major-civilization enemies (until it recovers to 85%), it rebuilds harder, cuts optional infrastructure further, adds City Defense capacity, favors the Grand Master's Chapel and gives up its planned attack slot.
+- **Military Recovery:** while the AI's military strength is below 70% of its combined major-civilization enemies (until it recovers to 85%), it rebuilds harder, cuts optional infrastructure further, adds City Defense capacity and gives up its planned attack slot.
 - **War Advantage:** while the AI is at least 125% as strong as its enemies (until it falls below 110%), it does not seek peace (it can still accept an offer) and gets a second wartime attack.
 - **Austerity:** when the AI is nearly out of Gold and losing Gold each turn, it favors Gold, Traders, Commercial Hubs and Harbors and trims part of its extra wartime unit demand until the treasury recovers. It never disbands units or cancels attacks.
 

@@ -17,11 +17,12 @@ Most changes are AI preference weights: they make an option more or less attract
 ### Economy and development
 
 - Food and Production weighted up from the Ancient to the Renaissance era, with some early Culture and less early Science. Each era's weights apply only while the AI is in that era.
-- Higher priority for population, Traders (always), Great Merchants, Great Engineers and Medieval districts.
-- Favored districts: Commercial Hubs (Ancient to Medieval), Industrial Zones (Medieval and Renaissance), Government Plazas and Aqueducts (always), 15 civilizations' unique districts (always), Campuses from the Renaissance (with Great Scientist points and Science), and Aerodromes from the Modern era (with air units).
+- Higher priority for population, Traders (always), Great Merchants (Classical and Medieval), Great Engineers, and districts and Science from the Medieval to the Industrial era.
+- Favored districts: Government Plazas, Aqueducts, Diplomatic Quarters and Dams (always; no Dams for Egypt), 15 civilizations' unique districts (always), Commercial Hubs (Classical and Medieval), Industrial Zones (from the Medieval era), Campuses for science leaders and Theater Squares for cultural leaders from the Renaissance (also for any AI meeting the Science or Culture Victory conditions then), and Aerodromes for aggressive military leaders and AIs pursuing a military victory.
 - Technology and civic priorities: Currency, Engineering (the first siege units), Feudalism and Political Philosophy; the later government civics come from the civic grants below.
-- The religious dedication (Golden Age Great Prophet points) is disfavored for every AI.
-- Improvements (and so Builders) valued more in the Medieval and Renaissance eras.
+- Dedications: Monumentality for every AI in a Golden Age; otherwise Monumentality, Free Inquiry for science leaders until the Renaissance, and Monumentality or, once they have founded a religion, Exodus of the Evangelists for religious leaders. Pen, Brush and Voice is not favored.
+- Religious Victory is pursued only after founding a religion, except by religious leaders.
+- Improvements (and so Builders) valued more from the Medieval to the Industrial era.
 
 ### Civics and policy cards
 
@@ -73,10 +74,10 @@ The base game's nuclear operation could not order or keep a delivery unit, so th
 
 ### Leaders
 
-- Curated religious and low-religion leader groups; leaders who should not spend an early district slot on religion avoid early Holy Sites and Stonehenge, while religious leaders favor early Holy Sites, Great Prophets and Stonehenge (both Saladin versions have their own tuning).
-- Harbors for selected naval leaders, native coastal raids for original Harald, cavalry and Holy War for Basil II, and expansionist settling for Victoria and Philip II.
+- Curated science, cultural, religious, aggressive-military and low-religion leader groups; leaders who should not spend an early district slot on religion avoid Ancient-era Holy Sites and Stonehenge, while religious leaders favor Holy Sites up to the Medieval era, early Great Prophets and Stonehenge (both Saladin versions have their own tuning).
+- Harbors for selected naval leaders, native coastal raids for original Harald, cavalry and Holy War for Basil II, and expansionist settling for Victoria, Philip II and Peter the Great, and more districts for Hammurabi, Nubia and Germany.
 - Aggressive military leaders favor formal and surprise wars, value friendships less, and favor the Grand Master's Chapel (Faith purchases of land units).
-- Preserves and Mysticism for Bull Moose Roosevelt and John Curtin, Preserves for the Maori, Theater Squares for Hammurabi.
+- Preserves and Mysticism for Bull Moose Roosevelt and John Curtin, Preserves for the Maori, Canals for Qin Shi Huang (Mandate of Heaven), Entertainment Complexes for Scotland.
 
 ### Choice signals
 
@@ -84,7 +85,7 @@ Some policy cards, beliefs and governments carry extra modifiers that the AI's c
 
 - **Adjacency cards** (Natural Philosophy, Scripture, Aesthetics, Town Charters, Naval Infrastructure, Craftsmen, Five-Year Plan, Economic Union) score +5 of their yield per point of the matching district's adjacency in each city, up to 10 points.
 - **Follower beliefs** (Work Ethic, Jesuit Education, Choral Music, Feed the World, Zen Meditation, Religious Community) score a small yield per city with a Holy Site (Work Ethic: one with +3 adjacency or more).
-- Nine governments and Serfdom and Public Works carry a small envoy signal.
+- Nine governments carry a small envoy signal, and Serfdom and Public Works a larger one, so the AI keeps its Builder charge card slotted.
 
 The native effects of these cards, beliefs and governments are unchanged.
 

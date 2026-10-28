@@ -282,22 +282,82 @@ end
 -- ============================================================================
 -- Era windows: the base era strategies never end once adopted, so per-era
 -- lists sit on these instead. Each is on while the player's era lies in its
--- range and, for a leader window, the leader has one of its traits. Trait and
--- era are synchronized game state, so every machine agrees. AGENTS.md "Era
--- window strategies", "Leader era window strategies".
+-- range (no sLast: to the end of the game) and, for a leader window, the leader
+-- has one of its traits and none of tExcludeTraits; a bGoldenAge window also
+-- needs a Golden Age, a bFoundedReligion window a religion the player founded.
+-- There is one Golden window per dedication era, so each starts at most once
+-- and the engine's 20-turn restart hold never meets it.
+-- Trait, era, age and religion are synchronized game state, so every machine
+-- agrees. RenaissanceOnward is only the era gate of the focus
+-- strategies, whose other conditions are engine rows. AGENTS.md "Era window
+-- strategies", "Leader era window strategies", "Focus strategies",
+-- "Dedication preferences".
 -- ============================================================================
+local tSaladinTraits = { "TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH", "TRAIT_LEADER_SALADIN_ALT" };
 local tEraWindows = {
 	{ sCallback = "AncientEra",     sFirst = "ERA_ANCIENT",     sLast = "ERA_ANCIENT" },
 	{ sCallback = "ClassicalEra",   sFirst = "ERA_CLASSICAL",   sLast = "ERA_CLASSICAL" },
 	{ sCallback = "MedievalEra",    sFirst = "ERA_MEDIEVAL",    sLast = "ERA_MEDIEVAL" },
 	{ sCallback = "RenaissanceEra", sFirst = "ERA_RENAISSANCE", sLast = "ERA_RENAISSANCE" },
+	{ sCallback = "MedievalToIndustrial", sFirst = "ERA_MEDIEVAL", sLast = "ERA_INDUSTRIAL" },
+	{ sCallback = "RenaissanceOnward", sFirst = "ERA_RENAISSANCE" },
 	{ sCallback = "ReligiousEarly", sFirst = "ERA_ANCIENT",     sLast = "ERA_CLASSICAL",
-		tTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" } },
+		tTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" }, tExcludeTraits = tSaladinTraits },
+	{ sCallback = "ReligiousHolySite", sFirst = "ERA_ANCIENT",  sLast = "ERA_MEDIEVAL",
+		tTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" }, tExcludeTraits = tSaladinTraits },
 	{ sCallback = "SaladinHolySite", sFirst = "ERA_CLASSICAL",  sLast = "ERA_MEDIEVAL",
-		tTraits = { "TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH", "TRAIT_LEADER_SALADIN_ALT" } },
-	{ sCallback = "AvoidHolySitesEarly", sFirst = "ERA_ANCIENT", sLast = "ERA_CLASSICAL",
+		tTraits = tSaladinTraits },
+	{ sCallback = "AvoidHolySitesEarly", sFirst = "ERA_ANCIENT", sLast = "ERA_ANCIENT",
 		tTraits = { "TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES" } },
+	{ sCallback = "ScienceLeaderLate", sFirst = "ERA_RENAISSANCE",
+		tTraits = { "TRAIT_LEADER_SCIENCE_MAJOR_CIV" } },
+	{ sCallback = "CultureLeaderLate", sFirst = "ERA_RENAISSANCE",
+		tTraits = { "TRAIT_LEADER_CULTURAL_MAJOR_CIV" } },
+	{ sCallback = "GoldenClassical",   sFirst = "ERA_CLASSICAL",   sLast = "ERA_CLASSICAL",   bGoldenAge = true },
+	{ sCallback = "GoldenMedieval",    sFirst = "ERA_MEDIEVAL",    sLast = "ERA_MEDIEVAL",    bGoldenAge = true },
+	{ sCallback = "GoldenRenaissance", sFirst = "ERA_RENAISSANCE", sLast = "ERA_RENAISSANCE", bGoldenAge = true },
+	{ sCallback = "ReligiousFounded", sFirst = "ERA_ANCIENT",
+		tTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" }, bFoundedReligion = true },
 };
+
+-- Golden (or Heroic) Age from ROSE_GOLDEN_AGE, the player property the Golden
+-- Age flag modifier holds (the gameplay Eras table has no age read); a missing
+-- or failing read counts as no Golden Age, and the first failure is printed once.
+local GOLDEN_AGE_PROPERTY = "ROSE_GOLDEN_AGE";
+local bGoldenAgeReadWarned = false;
+local function HasGoldenAge(iPlayerID)
+	local bOk, bGolden = pcall(function()
+		local iFlag = Players[iPlayerID]:GetProperty(GOLDEN_AGE_PROPERTY);
+		return iFlag ~= nil and iFlag > 0;
+	end);
+	if not bOk then
+		if not bGoldenAgeReadWarned then
+			bGoldenAgeReadWarned = true;
+			print("Rose AI: Golden Age read failed; Golden Age windows stay off: " .. tostring(bGolden));
+		end
+		return false;
+	end
+	return bGolden == true;
+end
+
+-- A religion the player founded (a pantheon alone does not count); a missing or
+-- failing read counts as none, and the first such failure is printed once.
+local bReligionReadWarned = false;
+local function HasFoundedReligion(iPlayerID)
+	local bOk, bFounded = pcall(function()
+		local eReligion = Players[iPlayerID]:GetReligion():GetReligionTypeCreated();
+		local kReligion = eReligion ~= nil and eReligion >= 0 and GameInfo.Religions[eReligion] or nil;
+		return kReligion ~= nil and not kReligion.Pantheon;
+	end);
+	if not bOk then
+		if not bReligionReadWarned then
+			bReligionReadWarned = true;
+			print("Rose AI: Founded religion read failed; religion windows stay off: " .. tostring(bFounded));
+		end
+		return false;
+	end
+	return bFounded == true;
+end
 
 local tEraWindowState = {};
 
@@ -311,20 +371,33 @@ local function IsEraWindowActive(iPlayerID, kWindow)
 	local bActive = false;
 	local iEra = nil;
 	if IsEligibleAIPlayer(pPlayer)
-		and (kWindow.tTraits == nil or PlayerHasLeaderTrait(iPlayerID, kWindow.tTraits)) then
+		and (kWindow.tTraits == nil or PlayerHasLeaderTrait(iPlayerID, kWindow.tTraits))
+		and (kWindow.tExcludeTraits == nil or not PlayerHasLeaderTrait(iPlayerID, kWindow.tExcludeTraits))
+		and (not kWindow.bGoldenAge or HasGoldenAge(iPlayerID))
+		and (not kWindow.bFoundedReligion or HasFoundedReligion(iPlayerID)) then
 		iEra = GetPlayerEraIndex(pPlayer);
 		local iFirst = GetEraIndex(kWindow.sFirst);
-		local iLast = GetEraIndex(kWindow.sLast);
-		bActive = iEra ~= nil and iFirst ~= nil and iLast ~= nil
-			and iEra >= iFirst and iEra <= iLast;
+		local iLast = kWindow.sLast ~= nil and GetEraIndex(kWindow.sLast) or nil;
+		bActive = iEra ~= nil and iFirst ~= nil
+			and (kWindow.sLast == nil or iLast ~= nil)
+			and iEra >= iFirst and (iLast == nil or iEra <= iLast);
 	end
 	local sKey = tostring(iPlayerID) .. ":" .. kWindow.sCallback;
 	if (tEraWindowState[sKey] or false) ~= bActive then
 		tEraWindowState[sKey] = bActive;
+		-- The raw flag is printed only, to show a modifier that never attached (nil)
+		-- or applied twice after a reload (2).
+		local sFlag = "";
+		if kWindow.bGoldenAge then
+			local bOk, vFlag = pcall(function() return pPlayer:GetProperty(GOLDEN_AGE_PROPERTY); end);
+			sFlag = " flag " .. (bOk and tostring(vFlag) or "unreadable");
+		end
 		print("Rose AI: Era window " .. kWindow.sCallback
 			.. " player " .. iPlayerID
 			.. " active " .. tostring(bActive)
-			.. " era " .. tostring(iEra));
+			.. " era " .. tostring(iEra)
+			.. " turn " .. tostring(Game.GetCurrentGameTurn())
+			.. sFlag);
 	end
 	return bActive;
 end

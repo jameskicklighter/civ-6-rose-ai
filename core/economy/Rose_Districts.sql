@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Rose AI: generic district priorities on the Rose era window strategies, the
--- era-onward strategies (Rose_Strategies.sql), all majors and each
--- civilization's unique district. Leader-specific districts: Leaders/Rose_Leader_Lists.sql.
+-- era-onward and focus strategies (Rose_Strategies.sql), Military Victory, all
+-- majors and civilizations. Leader-specific districts: Leaders/Rose_Leader_Lists.sql.
 -- AGENTS.md "## Current Features", "### economy/Rose_Districts.sql".
 -- ============================================================================
 
@@ -10,16 +10,6 @@
 DELETE FROM AiFavoredItems
 WHERE ListType = 'ClassicalDistricts'
   AND Item IN ('DISTRICT_CAMPUS', 'DISTRICT_THEATER');
-
--- Ancient: Commercial Hub; AGENTS.md "Commercial Hub district favored"
-INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseAncientDistricts');
-INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseAncientDistricts',      'Districts');
-INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_ANCIENT_ERA',      'RoseAncientDistricts');
-INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseAncientDistricts',    'DISTRICT_COMMERCIAL_HUB',  1);
 
 -- Classical: Commercial Hub; AGENTS.md "Commercial Hub district favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
@@ -31,7 +21,7 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseClassicalDistricts',  'DISTRICT_COMMERCIAL_HUB',  1);
 
--- Medieval: Commercial Hub and Industrial Zone; AGENTS.md "Commercial Hub district favored", "Industrial Zone favored"
+-- Medieval: Commercial Hub; AGENTS.md "Commercial Hub district favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMedievalDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
@@ -39,48 +29,84 @@ INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_MEDIEVAL_ERA',     'RoseMedievalDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseMedievalDistricts',   'DISTRICT_COMMERCIAL_HUB',  1),
-('RoseMedievalDistricts',     'DISTRICT_INDUSTRIAL_ZONE', 1);
+('RoseMedievalDistricts',   'DISTRICT_COMMERCIAL_HUB',  1);
 
--- Renaissance: Industrial Zone; AGENTS.md "Industrial Zone favored"
+-- Medieval onward: Industrial Zone; AGENTS.md "Industrial Zone favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseRenaissanceDistricts');
+('RoseMedievalOnwardDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseRenaissanceDistricts',  'Districts');
+('RoseMedievalOnwardDistricts', 'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_RENAISSANCE_ERA',  'RoseRenaissanceDistricts');
+('STRATEGY_ROSE_MEDIEVAL_ONWARD',  'RoseMedievalOnwardDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseRenaissanceDistricts',  'DISTRICT_INDUSTRIAL_ZONE', 1);
+('RoseMedievalOnwardDistricts', 'DISTRICT_INDUSTRIAL_ZONE', 1);
 
--- Renaissance onward: Campus, level with the other favored districts;
--- AGENTS.md "Campus from the Renaissance era"
+-- Renaissance onward, science leaders and players whose Science Victory
+-- conditions hold: Campus; AGENTS.md "Campus and Theater Square by focus from the Renaissance era"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseRenaissanceOnwardDistricts');
+('RoseScienceLeaderDistricts'),
+('RoseScienceFocusDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseRenaissanceOnwardDistricts', 'Districts');
+('RoseScienceLeaderDistricts', 'Districts'),
+('RoseScienceFocusDistricts',  'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_RENAISSANCE_ONWARD', 'RoseRenaissanceOnwardDistricts');
+('STRATEGY_ROSE_SCIENCE_LEADER_LATE', 'RoseScienceLeaderDistricts'),
+('STRATEGY_ROSE_SCIENCE_FOCUS',       'RoseScienceFocusDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseRenaissanceOnwardDistricts', 'DISTRICT_CAMPUS',     1);
+('RoseScienceLeaderDistricts', 'DISTRICT_CAMPUS', 1),
+('RoseScienceFocusDistricts',  'DISTRICT_CAMPUS', 1);
 
--- Modern onward: Aerodrome (no base list favors it); AGENTS.md "Aerodrome from the Modern era"
+-- Renaissance onward, cultural leaders and players whose Culture Victory
+-- conditions hold: Theater Square; AGENTS.md "Campus and Theater Square by focus from the Renaissance era"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseModernOnwardDistricts');
+('RoseCultureLeaderDistricts'),
+('RoseCultureFocusDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseModernOnwardDistricts', 'Districts');
+('RoseCultureLeaderDistricts', 'Districts'),
+('RoseCultureFocusDistricts',  'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_MODERN_ONWARD',   'RoseModernOnwardDistricts');
+('STRATEGY_ROSE_CULTURE_LEADER_LATE', 'RoseCultureLeaderDistricts'),
+('STRATEGY_ROSE_CULTURE_FOCUS',       'RoseCultureFocusDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseModernOnwardDistricts', 'DISTRICT_AERODROME',       1);
+('RoseCultureLeaderDistricts', 'DISTRICT_THEATER', 1),
+('RoseCultureFocusDistricts',  'DISTRICT_THEATER', 1);
 
--- All majors, all eras: Government Plaza and Aqueduct; AGENTS.md "Government Plaza always favored", "Aqueducts always favored"
+-- Military Victory: Aerodrome (buildable from Flight only, so no era window);
+-- the aggressive-military leaders' list is in Leaders/; AGENTS.md "Aerodrome for military leaders and Military Victory"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseMilitaryVictoryDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseMilitaryVictoryDistricts', 'Districts');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('VICTORY_STRATEGY_MILITARY_VICTORY', 'RoseMilitaryVictoryDistricts');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseMilitaryVictoryDistricts', 'DISTRICT_AERODROME', 1);
+
+-- All majors, all eras: Government Plaza, Aqueduct, Diplomatic Quarter and Dam;
+-- AGENTS.md "Government Plaza always favored", "Aqueducts always favored",
+-- "Diplomatic Quarter and Dam always favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivDistricts', 'TRAIT_LEADER_MAJOR_CIV', 'Districts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseMajorCivDistricts', 'DISTRICT_GOVERNMENT', 1),
-('RoseMajorCivDistricts', 'DISTRICT_AQUEDUCT',   1);
+('RoseMajorCivDistricts', 'DISTRICT_GOVERNMENT',         1),
+('RoseMajorCivDistricts', 'DISTRICT_AQUEDUCT',           1),
+('RoseMajorCivDistricts', 'DISTRICT_DIPLOMATIC_QUARTER', 1),
+('RoseMajorCivDistricts', 'DISTRICT_DAM',                1);
+
+-- Egypt (every leader): Dam disfavored against the all-majors favor. The base
+-- Cleopatra disfavor moves to the civilization trait and a second Egypt list
+-- adds one more, so the sum is -1 (one row in each of two lists); AGENTS.md
+-- "Diplomatic Quarter and Dam always favored"
+UPDATE AiLists SET LeaderType = 'TRAIT_CIVILIZATION_ITERU'
+WHERE ListType = 'CleopatraDistricts' AND LeaderType = 'TRAIT_LEADER_MEDITERRANEAN';
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseEgyptDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseEgyptDistricts', 'TRAIT_CIVILIZATION_ITERU', 'Districts');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseEgyptDistricts', 'DISTRICT_DAM', 0);
 
 -- The Preserve takes a specialty-district slot but is priced like an Aqueduct;
 -- give it the specialty-district cost model and discount (all players);
@@ -154,3 +180,16 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseGaulDistricts',       'DISTRICT_OPPIDUM',             1),
 ('RoseVietnamDistricts',    'DISTRICT_THANH',               1),
 ('RoseMayaDistricts',       'DISTRICT_OBSERVATORY',         1);
+
+-- Scotland: the base Campus and Industrial Zone favors are removed and the
+-- Entertainment Complex (amenities for its happy-city bonuses) is always
+-- favored; AGENTS.md "Scotland Entertainment Complex favored"
+DELETE FROM AiFavoredItems
+WHERE ListType = 'ScottishEnlightnmentDistricts'
+  AND Item IN ('DISTRICT_CAMPUS', 'DISTRICT_INDUSTRIAL_ZONE');
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseScotlandDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseScotlandDistricts', 'TRAIT_CIVILIZATION_SCOTTISH_ENLIGHTENMENT', 'Districts');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseScotlandDistricts', 'DISTRICT_ENTERTAINMENT_COMPLEX', 1);

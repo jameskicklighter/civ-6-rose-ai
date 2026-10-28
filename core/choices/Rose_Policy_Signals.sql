@@ -31,11 +31,12 @@ FROM AdjacencyCards c
 CROSS JOIN Tiers t
 JOIN Policies source ON source.PolicyType = c.SourceType;
 
--- Serfdom and Public Works: one player envoy signal each;
+-- Serfdom and Public Works: one player envoy signal each, sized to keep the
+-- Builder charge card slotted against the adjacency cards;
 -- AGENTS.md "Serfdom/Public Works"
 WITH ChoiceSources (BiasId, SourceType, Amount, GateType, YieldType) AS (VALUES
-('ROSE_CHOICE_POLICY_SERFDOM', 'POLICY_SERFDOM', 1, 'ALWAYS', NULL),
-('ROSE_CHOICE_POLICY_PUBLIC_WORKS', 'POLICY_PUBLIC_WORKS', 1, 'ALWAYS', NULL)
+('ROSE_CHOICE_POLICY_SERFDOM', 'POLICY_SERFDOM', 3, 'ALWAYS', NULL),
+('ROSE_CHOICE_POLICY_PUBLIC_WORKS', 'POLICY_PUBLIC_WORKS', 5, 'ALWAYS', NULL)
 )
 INSERT INTO RoseChoiceBiases (BiasId, SourceKind, SourceType, Amount, GateType, YieldType)
 SELECT b.BiasId, 'POLICY', b.SourceType, b.Amount, b.GateType, b.YieldType

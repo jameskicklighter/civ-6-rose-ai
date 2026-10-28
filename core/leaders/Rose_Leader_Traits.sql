@@ -4,36 +4,67 @@
 -- AGENTS.md "## Current Features", "### leaders/ (Rose_Leader_Traits.sql, Rose_Leader_Lists.sql)".
 -- ============================================================================
 
--- Religious group expanded; AGENTS.md "Religious civs expanded"
-INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType) VALUES
-('LEADER_BASIL',          'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'),
-('LEADER_GITARJA',        'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'),
-('LEADER_MENELIK',        'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'),
-('LEADER_MANSA_MUSA',     'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'),
-('LEADER_SUNDIATA_KEITA', 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'),
-('LEADER_HARDRADA',       'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'),
-('LEADER_HARALD_ALT',     'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV');
-
--- Both Saladins out of the religious group (he gets the last Prophet free);
--- AGENTS.md "Saladin removed from religious group"
+-- The science, cultural, religious and aggressive-military groups are cleared
+-- and re-added from curated lists (these traits carry AI lists only, no
+-- gameplay modifiers); AGENTS.md "Leader groups curated"
 DELETE FROM LeaderTraits
-WHERE TraitType = 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV'
-  AND LeaderType IN ('LEADER_SALADIN', 'LEADER_SALADIN_ALT');
+WHERE TraitType IN ('TRAIT_LEADER_SCIENCE_MAJOR_CIV', 'TRAIT_LEADER_CULTURAL_MAJOR_CIV',
+                    'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'TRAIT_LEADER_AGGRESSIVE_MILITARY');
 
--- Saladin (Vizier) as aggressive military; AGENTS.md "Saladin (Vizier) reclassified as aggressive military"
-INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType) VALUES
-('LEADER_SALADIN_ALT', 'TRAIT_LEADER_AGGRESSIVE_MILITARY');
+-- Science leaders; AGENTS.md "Leader groups curated"
+INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType)
+SELECT LeaderType, 'TRAIT_LEADER_SCIENCE_MAJOR_CIV' FROM Leaders WHERE LeaderType IN (
+    'LEADER_GILGAMESH', 'LEADER_JOAO_III', 'LEADER_JOHN_CURTIN', 'LEADER_LADY_SIX_SKY',
+    'LEADER_MATTHIAS_CORVINUS', 'LEADER_NZINGA_MBANDE', 'LEADER_PACHACUTI', 'LEADER_POUNDMAKER',
+    'LEADER_ROBERT_THE_BRUCE', 'LEADER_SALADIN', 'LEADER_SEJONG', 'LEADER_SEONDEOK',
+    'LEADER_SULEIMAN_ALT', 'LEADER_T_ROOSEVELT', 'LEADER_TOKUGAWA', 'LEADER_WILHELMINA',
+    'LEADER_YONGLE');
 
--- Expansionist settling (base effect: lower settle thresholds) for Victoria
--- and Philip II; AGENTS.md "Expansionist settling for Victoria and Philip II"
-INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType) VALUES
-('LEADER_VICTORIA',  'TRAIT_LEADER_EXPANSIONIST'),
-('LEADER_PHILIP_II', 'TRAIT_LEADER_EXPANSIONIST');
+-- Cultural leaders; AGENTS.md "Leader groups curated"
+INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType)
+SELECT LeaderType, 'TRAIT_LEADER_CULTURAL_MAJOR_CIV' FROM Leaders WHERE LeaderType IN (
+    'LEADER_CATHERINE_DE_MEDICI_ALT', 'LEADER_CLEOPATRA_ALT', 'LEADER_ELEANOR_ENGLAND',
+    'LEADER_ELEANOR_FRANCE', 'LEADER_GORGO', 'LEADER_HOJO', 'LEADER_KRISTINA', 'LEADER_KUPE',
+    'LEADER_LUDWIG', 'LEADER_MVEMBA', 'LEADER_PERICLES', 'LEADER_QIN', 'LEADER_RAMSES',
+    'LEADER_SUNDIATA_KEITA', 'LEADER_THEODORA', 'LEADER_LAURIER', 'LEADER_T_ROOSEVELT');
 
--- Roosevelt was the only nonreligious leader; AGENTS.md "Roosevelt NONRELIGIOUS removed"
+-- Religious leaders (both Saladins too: the leader windows skip his traits and
+-- Leaders/ keeps his Stonehenge disfavor); AGENTS.md "Leader groups curated"
+INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType)
+SELECT LeaderType, 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV' FROM Leaders WHERE LeaderType IN (
+    'LEADER_BASIL', 'LEADER_GANDHI', 'LEADER_GITARJA', 'LEADER_HARDRADA', 'LEADER_HARALD_ALT',
+    'LEADER_HOJO', 'LEADER_JADWIGA', 'LEADER_JAYAVARMAN', 'LEADER_KUPE', 'LEADER_MANSA_MUSA',
+    'LEADER_MENELIK', 'LEADER_PEDRO', 'LEADER_PETER_GREAT', 'LEADER_PHILIP_II', 'LEADER_SALADIN',
+    'LEADER_SALADIN_ALT', 'LEADER_TAMAR', 'LEADER_THEODORA', 'LEADER_TOMYRIS');
+
+-- Aggressive-military leaders; AGENTS.md "Leader groups curated"
+INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType)
+SELECT LeaderType, 'TRAIT_LEADER_AGGRESSIVE_MILITARY' FROM Leaders WHERE LeaderType IN (
+    'LEADER_ABRAHAM_LINCOLN', 'LEADER_ALEXANDER', 'LEADER_AMBIORIX', 'LEADER_BASIL',
+    'LEADER_CHANDRAGUPTA', 'LEADER_CYRUS', 'LEADER_BARBAROSSA', 'LEADER_GENGHIS_KHAN',
+    'LEADER_GORGO', 'LEADER_HAMMURABI', 'LEADER_HARDRADA', 'LEADER_HARALD_ALT',
+    'LEADER_JULIUS_CAESAR', 'LEADER_LAUTARO', 'LEADER_MATTHIAS_CORVINUS', 'LEADER_MONTEZUMA',
+    'LEADER_NADER_SHAH', 'LEADER_PHILIP_II', 'LEADER_QIN_ALT', 'LEADER_SALADIN_ALT',
+    'LEADER_SHAKA', 'LEADER_SIMON_BOLIVAR', 'LEADER_SULEIMAN', 'LEADER_VICTORIA');
+
+-- Diplomatic victory: the Rough Rider Roosevelt (his corollary's envoys)
+-- instead of the Bull Moose; AGENTS.md "Leader groups curated"
 DELETE FROM LeaderTraits
-WHERE TraitType = 'TRAIT_LEADER_NONRELIGIOUS_MAJOR_CIV'
-  AND LeaderType = 'LEADER_T_ROOSEVELT';
+WHERE TraitType = 'TRAIT_LEADER_PURSUE_DIPLOMATIC_VICTORY' AND LeaderType = 'LEADER_T_ROOSEVELT';
+INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType)
+SELECT LeaderType, 'TRAIT_LEADER_PURSUE_DIPLOMATIC_VICTORY' FROM Leaders
+WHERE LeaderType = 'LEADER_T_ROOSEVELT_ROUGHRIDER';
+
+-- Expansionist settling (base effect: lower settle thresholds) for Victoria,
+-- Philip II and Peter; AGENTS.md "Expansionist settling for Victoria and Philip II"
+INSERT OR IGNORE INTO LeaderTraits (LeaderType, TraitType)
+SELECT LeaderType, 'TRAIT_LEADER_EXPANSIONIST' FROM Leaders WHERE LeaderType IN (
+    'LEADER_VICTORIA', 'LEADER_PHILIP_II', 'LEADER_PETER_GREAT');
+
+-- No leader is kept off Religious Victory (Kongo cannot found a religion
+-- anyway); AGENTS.md "Roosevelt NONRELIGIOUS removed"
+DELETE FROM LeaderTraits
+WHERE TraitType = 'TRAIT_LEADER_NONRELIGIOUS_MAJOR_CIV';
 
 -- Low religious preference (base: Great Prophet -75, Faith -50) cleared and
 -- re-added for a curated list; AGENTS.md "LOW_RELIGIOUS_PREFERENCE reset"

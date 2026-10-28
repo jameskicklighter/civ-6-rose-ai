@@ -7,17 +7,17 @@
 -- AGENTS.md "## Current Features", "### leaders/ (Rose_Leader_Traits.sql, Rose_Leader_Lists.sql)".
 -- ============================================================================
 
--- Religious leaders: Holy Site favored, Ancient and Classical eras; AGENTS.md "Religious leader Holy Site favored"
+-- Religious leaders except Saladin (his window below): Holy Site favored, Ancient to Medieval eras; AGENTS.md "Religious leader Holy Site favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseReligiousEarlyDistricts');
+('RoseReligiousHolySiteDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
-('RoseReligiousEarlyDistricts',    'Districts');
+('RoseReligiousHolySiteDistricts', 'Districts');
 INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
-('STRATEGY_ROSE_RELIGIOUS_EARLY',  'RoseReligiousEarlyDistricts');
+('STRATEGY_ROSE_RELIGIOUS_HOLY_SITE', 'RoseReligiousHolySiteDistricts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseReligiousEarlyDistricts',    'DISTRICT_HOLY_SITE', 1);
+('RoseReligiousHolySiteDistricts', 'DISTRICT_HOLY_SITE', 1);
 
--- Religious leaders: Great Prophet points, Ancient and Classical eras; AGENTS.md "Religious leader Great Prophet pseudoyield"
+-- Religious leaders except Saladin: Great Prophet points, Ancient and Classical eras; AGENTS.md "Religious leader Great Prophet pseudoyield"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseReligiousEarlyPseudoYields');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
@@ -37,7 +37,7 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseSaladinHolySiteDistricts',   'DISTRICT_HOLY_SITE', 1);
 
--- Avoid Early Holy Sites leaders: Holy Site disfavored, Ancient and Classical eras; AGENTS.md "Avoid Early Holy Sites trait created"
+-- Avoid Early Holy Sites leaders: Holy Site disfavored, Ancient era only; AGENTS.md "Avoid Early Holy Sites trait created"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseAvoidHSEarlyDistricts');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
@@ -63,8 +63,8 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseAvoidHSBuildings', 'BUILDING_STONEHENGE', 0);
 
--- Religious leaders: Stonehenge always favored (both Saladins are outside the
--- group); Theodora's base disfavor is removed so it does not cancel the favor;
+-- Religious leaders: Stonehenge always favored (both Saladins outweigh it with
+-- their own disfavors below); Theodora's base disfavor is removed so it does not cancel the favor;
 -- AGENTS.md "Religious leader Stonehenge favored"
 DELETE FROM AiFavoredItems
 WHERE ListType = 'TheodoraWonders' AND Item = 'BUILDING_STONEHENGE';
@@ -235,13 +235,52 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseMaoriDistricts',     'DISTRICT_PRESERVE', 1);
 
--- Hammurabi: Theater Square always favored; AGENTS.md "Hammurabi Theater Square favored"
+-- Saladin (both personas, in the religious group): Stonehenge disfavored, one
+-- list per persona trait, so with the base disfavor it outweighs the religious
+-- favor; AGENTS.md "Leader groups curated"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
-('RoseHammurabiDistricts');
+('RoseSaladinBuildings'),
+('RoseSaladinAltBuildings');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
-('RoseHammurabiDistricts', 'TRAIT_LEADER_HAMMURABI',             'Districts');
+('RoseSaladinBuildings',    'TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH', 'Buildings'),
+('RoseSaladinAltBuildings', 'TRAIT_LEADER_SALADIN_ALT',            'Buildings');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseHammurabiDistricts', 'DISTRICT_THEATER',  1);
+('RoseSaladinBuildings',    'BUILDING_STONEHENGE', 0),
+('RoseSaladinAltBuildings', 'BUILDING_STONEHENGE', 0);
+
+-- Nubia and Germany (civilization traits, every leader): district pseudoyield
+-- +50, as Hammurabi's base agenda list gives him; AGENTS.md "District pseudoyield for Nubia and Germany"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseNubiaPseudoYields'),
+('RoseGermanyPseudoYields');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseNubiaPseudoYields',   'TRAIT_CIVILIZATION_TA_SETI',              'PseudoYields'),
+('RoseGermanyPseudoYields', 'TRAIT_CIVILIZATION_IMPERIAL_FREE_CITIES', 'PseudoYields');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseNubiaPseudoYields',   'PSEUDOYIELD_DISTRICT', 1, 50),
+('RoseGermanyPseudoYields', 'PSEUDOYIELD_DISTRICT', 1, 50);
+
+-- Eleanor: the base Theater Square favor is removed, leaving Theater Squares to
+-- the cultural lists; AGENTS.md "Eleanor Theater Square favor removed"
+DELETE FROM AiFavoredItems WHERE ListType = 'EleanorDistricts' AND Item = 'DISTRICT_THEATER';
+
+-- Qin Shi Huang (Mandate of Heaven; his trait unlocks the Canal at Masonry):
+-- Canal always favored; AGENTS.md "Qin Shi Huang Canal favored"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseQinDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseQinDistricts',       'FIRST_EMPEROR_TRAIT',                'Districts');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseQinDistricts',       'DISTRICT_CANAL',    1);
+
+-- Aggressive military: Aerodrome always favored (buildable from Flight only);
+-- AGENTS.md "Aerodrome for military leaders and Military Victory"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseAggressiveMilitaryDistricts');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseAggressiveMilitaryDistricts', 'TRAIT_LEADER_AGGRESSIVE_MILITARY', 'Districts');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseAggressiveMilitaryDistricts', 'DISTRICT_AERODROME', 1);
 
 -- Bull Moose Roosevelt: Mysticism (needed for Preserves) always favored (a Civics list has no effect on a strategy); AGENTS.md "Mysticism civic prioritized"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES

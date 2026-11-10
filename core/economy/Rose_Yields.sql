@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Rose AI: generic yield and pseudoyield lists on the Rose era window
 -- strategies, the cumulative era-onward strategies (Rose_Strategies.sql) and
--- all majors.
+-- all majors, and the Modern-onward nuclear willingness.
 -- Values are percent changes of the defaults. Leader lists: Leaders/.
 -- AGENTS.md "## Current Features", "### economy/Rose_Yields.sql".
 -- ============================================================================
@@ -171,6 +171,19 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseModernOnwardPseudoYields',      'PSEUDOYIELD_CITY_DEFENSES',        1, -10),
 ('RoseModernOnwardPseudoYields',      'PSEUDOYIELD_UNIT_AIR_COMBAT',      1,  25);
+
+-- Modern onward: every AI nuke-willing ("Will use nukes" passes on a favored
+-- action), on a strategy that never stops, so no restart cooldown leaves a war
+-- without it; AGENTS.md "Nuclear willingness from the Modern era",
+-- AGENTS.md "Known engine behaviour: nuclear operations"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseModernOnwardDiplomacy');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseModernOnwardDiplomacy',         'DiplomaticActions');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_MODERN_ONWARD',      'RoseModernOnwardDiplomacy');
+INSERT OR REPLACE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseModernOnwardDiplomacy',         'DIPLOACTION_USE_NUCLEAR_WEAPON',   1,   0);
 
 -- All majors, all eras: Traders always favored; AGENTS.md "Trader units always favored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES

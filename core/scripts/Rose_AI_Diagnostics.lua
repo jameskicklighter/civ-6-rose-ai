@@ -1,13 +1,20 @@
 -- ============================================================================
 -- Rose AI: print-only diagnostics, silent unless ROSE_VERBOSE_LOGS. From
 -- PlayerTurnStartComplete: the city-state operation report and the operation
--- read probe; at both turn hooks: the stuck Trader lines. They change nothing
--- and keep no saved state (lines repeat after a reload). AGENTS.md
--- "City-state operation report", "Operation read probe", "Stuck Trader diagnostic".
+-- read probe; from PlayerTurnStarted: the pantheon watch (completed Holy Sites,
+-- the capital's Holy Site and pantheon marker, and cities while an AI has no
+-- pantheon, then the pantheon it took); at both
+-- turn hooks: the stuck Trader lines. They change nothing and keep no saved
+-- state (lines repeat after a reload). AGENTS.md "City-state operation
+-- report", "Operation read probe", "Stuck Trader diagnostic".
 -- ============================================================================
 
 local ROSE_VERBOSE_LOGS = RoseMod.VerboseLogs; -- set in Rose_AI_Core
 local IsEligibleAIPlayer = RoseMod.IsEligibleAIPlayer;
+local PlayerHasLeaderTrait = RoseMod.PlayerHasLeaderTrait;
+local GetHolySiteDistricts = RoseMod.GetHolySiteDistricts;
+local GetPantheonMarkers = RoseMod.GetPantheonMarkers;
+local GetPantheonTerrainCounts = RoseMod.GetPantheonTerrainCounts;
 local GetUnitOperationName = RoseMod.GetUnitOperationName;
 local HasOperationAgainst = RoseMod.HasOperationAgainst;
 local ReadEnvoys = RoseMod.ReadEnvoys;
@@ -151,6 +158,183 @@ local function UpdateOperationProbe(iPlayerID)
 end
 
 -- ============================================================================
+-- Pantheon watch: for an AI with cities and no pantheon, a line when its
+-- completed Holy Sites (unique replacements included), whether its capital has
+-- one (yes, no, or ? when that cannot be told), whether the capital holds the
+-- hidden pantheon marker buildings (their labels, none, or ?), the best city's
+-- count of each terrain (jungle 4) or its city count change; one line when its
+-- pantheon is first seen, with the last watch values. The
+-- pantheon is read with GetPantheon (Firaxis' Viking scenario calls it in the
+-- gameplay context). The capital is matched through the district's city
+-- because City:GetDistricts():Members() is missing in gameplay Lua. A failed
+-- read shows "?" and warns once.
+-- ============================================================================
+local PANTHEON_GROUP_TRAITS = {
+	{ Name = "religious", Trait = "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" },
+	{ Name = "avoid", Trait = "TRAIT_LEADER_ROSE_AVOID_EARLY_HOLY_SITES" },
+	{ Name = "lowrel", Trait = "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE" },
+};
+local tPantheonWatch = {};
+local bPantheonDistrictWarned = false;
+local bPantheonReadWarned = false;
+local bPantheonCapitalWarned = false;
+local bPantheonMarkerWarned = false;
+local bPantheonCountWarned = false;
+
+-- One pass over the player's districts: the number of completed Holy Sites,
+-- and whether one of them is in the capital ("yes", "no", or "?" with no
+-- capital or when a completed Holy Site's city cannot be compared and none
+-- matched). City:GetDistricts():Members() is missing in gameplay Lua, so the
+-- capital is matched through District:GetCity() (Firaxis' Black Death scenario
+-- calls it there). A completion that cannot be read gives "?" for both.
+local function ReadHolySites(pPlayer)
+	local tSet = GetHolySiteDistricts();
+	local bCapitalOk, iCapitalID = pcall(function()
+		local pCapital = pPlayer:GetCities():GetCapitalCity();
+		if pCapital == nil then return nil; end
+		return pCapital:GetID();
+	end);
+	if not bCapitalOk then iCapitalID = nil; end
+	local iCount = 0;
+	local bInCapital, bUnmatched = false, false;
+	for _, pDistrict in pPlayer:GetDistricts():Members() do
+		if tSet[pDistrict:GetType()] then
+			local bOk, vComplete = pcall(function() return pDistrict:IsComplete(); end);
+			if not bOk then
+				if not bPantheonDistrictWarned then
+					bPantheonDistrictWarned = true;
+					print("Rose AI: Pantheon watch cannot read district completion (" .. tostring(vComplete)
+						.. "); holy sites shown as ?");
+				end
+				return "?", "?";
+			end
+			if vComplete == true then
+				iCount = iCount + 1;
+				if iCapitalID ~= nil and not bInCapital then
+					local bMatch, vInCapital = pcall(function() return pDistrict:GetCity():GetID() == iCapitalID; end);
+					if not bMatch then
+						bUnmatched = true;
+						if not bPantheonCapitalWarned then
+							bPantheonCapitalWarned = true;
+							print("Rose AI: Pantheon watch cannot match a Holy Site to the capital ("
+								.. tostring(vInCapital) .. "); capital shown as ?");
+						end
+					elseif vInCapital == true then
+						bInCapital = true;
+					end
+				end
+			end
+		end
+	end
+	if bInCapital then return iCount, "yes"; end
+	if iCapitalID == nil or bUnmatched then return iCount, "?"; end
+	return iCount, "no";
+end
+
+-- The marker field, "DESERT,KHMER jungle 1 desert 5 tundra 0": the labels of the markers the
+-- capital holds (none when it holds no marker, ? with no capital or when a read fails), then the best
+-- city's count of each terrain (? when the count cannot be read). A failed read warns once.
+local function ReadMarkers(pPlayer)
+	local bTerrainRead, vTerrain = pcall(GetPantheonTerrainCounts, pPlayer);
+	if not bTerrainRead and not bPantheonCountWarned then
+		bPantheonCountWarned = true;
+		print("Rose AI: Pantheon watch cannot count terrain (" .. tostring(vTerrain) .. "); counts shown as ?");
+	end
+	local tHeld = {};
+	local bOk, vRead = pcall(function()
+		local pCapital = pPlayer:GetCities():GetCapitalCity();
+		if pCapital == nil then return false; end
+		local pBuildings = pCapital:GetBuildings();
+		for _, kMarker in ipairs(GetPantheonMarkers()) do
+			if kMarker.Index ~= false and pBuildings:HasBuilding(kMarker.Index) == true then
+				table.insert(tHeld, kMarker.Label);
+			end
+		end
+		return true;
+	end);
+	local sList = "?";
+	if not bOk then
+		if not bPantheonMarkerWarned then
+			bPantheonMarkerWarned = true;
+			print("Rose AI: Pantheon watch cannot read the markers (" .. tostring(vRead) .. "); markers shown as ?");
+		end
+	elseif vRead == true then
+		sList = #tHeld > 0 and table.concat(tHeld, ",") or "none";
+	end
+	local function Count(sGroup) return bTerrainRead and tostring(vTerrain[sGroup]) or "?"; end
+	return sList .. " jungle " .. Count("JUNGLE") .. " desert " .. Count("DESERT") .. " tundra " .. Count("TUNDRA");
+end
+
+-- The pantheon's belief index, or nil when the player has none (or it cannot be read).
+local function ReadPantheon(pPlayer)
+	local bOk, vPantheon = pcall(function() return pPlayer:GetReligion():GetPantheon(); end);
+	if not bOk then
+		if not bPantheonReadWarned then
+			bPantheonReadWarned = true;
+			print("Rose AI: Pantheon watch cannot read the pantheon (" .. tostring(vPantheon) .. ")");
+		end
+		return nil;
+	end
+	if type(vPantheon) == "number" and vPantheon >= 0 then return vPantheon; end
+	return nil;
+end
+
+local function UpdatePantheonWatch(iPlayerID)
+	local pPlayer = Players[iPlayerID];
+	if not IsEligibleAIPlayer(pPlayer) then
+		tPantheonWatch[iPlayerID] = nil;
+		return;
+	end
+	local kState = tPantheonWatch[iPlayerID];
+	if kState ~= nil and kState.Taken then return; end
+	local iCities = pPlayer:GetCities():GetCount();
+	if iCities == 0 then return; end
+	if kState == nil then
+		local tGroup = {};
+		for _, kGroup in ipairs(PANTHEON_GROUP_TRAITS) do
+			if PlayerHasLeaderTrait(iPlayerID, { kGroup.Trait }) then table.insert(tGroup, kGroup.Name); end
+		end
+		local pConfig = PlayerConfigurations[iPlayerID];
+		kState = {
+			Leader = pConfig ~= nil and tostring(pConfig:GetLeaderTypeName()) or "unknown",
+			Group = #tGroup > 0 and table.concat(tGroup, "+") or "none",
+		};
+		tPantheonWatch[iPlayerID] = kState;
+	end
+	local iTurn = Game.GetCurrentGameTurn();
+	local vHolySites, sCapital = ReadHolySites(pPlayer);
+	local sMarker = ReadMarkers(pPlayer);
+	local sWho = " turn " .. iTurn .. " player " .. iPlayerID .. " " .. kState.Leader .. " group " .. kState.Group;
+	local iPantheon = ReadPantheon(pPlayer);
+	if iPantheon ~= nil then
+		kState.Taken = true;
+		local kBelief = GameInfo.Beliefs[iPantheon];
+		print("Rose AI: Pantheon taken seen" .. sWho .. ": "
+			.. (kBelief ~= nil and kBelief.BeliefType or ("index " .. iPantheon))
+			.. " holy sites " .. tostring(vHolySites) .. " capital " .. sCapital .. " markers " .. sMarker .. " cities " .. iCities
+			.. "; last watch " .. (kState.LastTurn ~= nil
+				and ("turn " .. kState.LastTurn .. " holy sites " .. tostring(kState.LastHolySites)
+					.. " capital " .. kState.LastCapital .. " markers " .. kState.LastMarker .. " cities " .. kState.LastCities)
+				or "none"));
+		return;
+	end
+	if kState.PrintedHolySites ~= vHolySites or kState.PrintedCapital ~= sCapital
+		or kState.PrintedMarker ~= sMarker or kState.PrintedCities ~= iCities then
+		kState.PrintedHolySites = vHolySites;
+		kState.PrintedCapital = sCapital;
+		kState.PrintedMarker = sMarker;
+		kState.PrintedCities = iCities;
+		print("Rose AI: Pantheon watch" .. sWho .. ": holy sites " .. tostring(vHolySites)
+			.. " capital " .. sCapital .. " markers " .. sMarker .. " cities " .. iCities);
+	end
+	kState.LastTurn = iTurn;
+	kState.LastHolySites = vHolySites;
+	kState.LastCapital = sCapital;
+	kState.LastMarker = sMarker;
+	kState.LastCities = iCities;
+end
+
+-- ============================================================================
 -- Stuck Trader diagnostic: an AI Trader on one plot for TRADER_STREAK_REPORT
 -- consecutive turn starts gets a line per hook call (moves, city, InGame route
 -- details), and one when the streak ends. AGENTS.md "Known engine behaviour: AI trade routes".
@@ -254,3 +438,4 @@ end
 RoseMod.RunTraderDiagnostic = RunTraderDiagnostic;
 RoseMod.UpdateCityStateOperations = UpdateCityStateOperations;
 RoseMod.UpdateOperationProbe = UpdateOperationProbe;
+RoseMod.UpdatePantheonWatch = UpdatePantheonWatch;

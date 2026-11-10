@@ -290,6 +290,23 @@ function Codec.DirectorOrders(tOrders)
 	return JoinSorted(tParts);
 end
 
+-- ROSE_NAVAL_SQUADRON: "turn@unitIDs" (comma-separated ids), the ships of the
+-- last naval superiority start. Read as { Turn, Ships }, or nil.
+function Codec.ReadNavalSquadron(value)
+	if type(value) ~= "string" then return nil; end
+	local sTurn, sShips = string.match(value, "^(%-?%d+)@([%d,]*)$");
+	if sTurn == nil then return nil; end
+	local kSquadron = { Turn = tonumber(sTurn), Ships = {} };
+	for sShip in string.gmatch(sShips, "%d+") do table.insert(kSquadron.Ships, tonumber(sShip)); end
+	return kSquadron;
+end
+
+function Codec.NavalSquadron(iTurn, tShips)
+	local tParts = {};
+	for _, iShip in ipairs(tShips) do table.insert(tParts, tostring(iShip)); end
+	return iTurn .. "@" .. table.concat(tParts, ",");
+end
+
 -- The bridge relay message fields (Rose_AI_InGame.lua builds them): "id=value"
 -- entries; read as { [id] = value string } for the values sPattern matches.
 local RELAY_NUMBER_PATTERN = "^%-?%d+%.?%d*$";

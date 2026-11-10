@@ -43,22 +43,22 @@ SELECT b.BiasId, 'POLICY', b.SourceType, b.Amount, b.GateType, b.YieldType
 FROM ChoiceSources b
 JOIN Policies source ON source.PolicyType = b.SourceType;
 
--- Government envoy signals: Theocracy for religion founders, Monarchy and
--- Merchant Republic for the others, tier 3 generic and leader-specific, tier 4;
--- the owner conditions are not proven chooser gates; AGENTS.md "Government signals unchanged"
+-- Government envoy signals, by tier: +5 each in tier 2, +10 in tier 3 (generic
+-- 9 plus the leader-specific 1: the scorer reads no owner condition, so every
+-- AI sees both), +15 in tier 4; AGENTS.md "Government signals", "Government scorer"
 WITH ChoiceSources (BiasId, SourceKind, SourceType, Amount, GateType, GateValue) AS (VALUES
 ('ROSE_CHOICE_GOV_MONARCHY_NON_FOUNDER',
- 'GOVERNMENT', 'GOVERNMENT_MONARCHY', 1, 'NON_FOUNDER', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_MONARCHY', 5, 'NON_FOUNDER', NULL),
 ('ROSE_CHOICE_GOV_MERCHANT_REPUBLIC_NON_FOUNDER',
- 'GOVERNMENT', 'GOVERNMENT_MERCHANT_REPUBLIC', 1, 'NON_FOUNDER', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_MERCHANT_REPUBLIC', 5, 'NON_FOUNDER', NULL),
 ('ROSE_CHOICE_GOV_THEOCRACY_FOUNDER',
- 'GOVERNMENT', 'GOVERNMENT_THEOCRACY', 1, 'FOUNDER', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_THEOCRACY', 5, 'FOUNDER', NULL),
 ('ROSE_CHOICE_GOV_COMMUNISM_GENERIC',
- 'GOVERNMENT', 'GOVERNMENT_COMMUNISM', 1, 'ALWAYS', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_COMMUNISM', 9, 'ALWAYS', NULL),
 ('ROSE_CHOICE_GOV_DEMOCRACY_GENERIC',
- 'GOVERNMENT', 'GOVERNMENT_DEMOCRACY', 1, 'ALWAYS', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_DEMOCRACY', 9, 'ALWAYS', NULL),
 ('ROSE_CHOICE_GOV_FASCISM_GENERIC',
- 'GOVERNMENT', 'GOVERNMENT_FASCISM', 1, 'ALWAYS', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_FASCISM', 9, 'ALWAYS', NULL),
 ('ROSE_CHOICE_GOV_COMMUNISM_SCIENCE',
  'GOVERNMENT', 'GOVERNMENT_COMMUNISM', 1, 'LEADER_TRAIT',
  'TRAIT_LEADER_SCIENCE_MAJOR_CIV'),
@@ -69,11 +69,11 @@ WITH ChoiceSources (BiasId, SourceKind, SourceType, Amount, GateType, GateValue)
  'GOVERNMENT', 'GOVERNMENT_FASCISM', 1, 'LEADER_TRAIT',
  'TRAIT_LEADER_AGGRESSIVE_MILITARY'),
 ('ROSE_CHOICE_GOV_CORPORATE_LIBERTARIANISM',
- 'GOVERNMENT', 'GOVERNMENT_CORPORATE_LIBERTARIANISM', 1, 'ALWAYS', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_CORPORATE_LIBERTARIANISM', 15, 'ALWAYS', NULL),
 ('ROSE_CHOICE_GOV_DIGITAL_DEMOCRACY',
- 'GOVERNMENT', 'GOVERNMENT_DIGITAL_DEMOCRACY', 1, 'ALWAYS', NULL),
+ 'GOVERNMENT', 'GOVERNMENT_DIGITAL_DEMOCRACY', 15, 'ALWAYS', NULL),
 ('ROSE_CHOICE_GOV_SYNTHETIC_TECHNOCRACY',
- 'GOVERNMENT', 'GOVERNMENT_SYNTHETIC_TECHNOCRACY', 1, 'ALWAYS', NULL)
+ 'GOVERNMENT', 'GOVERNMENT_SYNTHETIC_TECHNOCRACY', 15, 'ALWAYS', NULL)
 )
 INSERT INTO RoseChoiceBiases
     (BiasId, SourceKind, SourceType, Amount, GateType, GateValue)
@@ -120,15 +120,34 @@ DELETE FROM RoseChoiceBiases
 WHERE GateType IN ('ADJACENCY', 'HOLY_SITE')
   AND BiasId NOT IN (SELECT BiasId FROM RoseChoiceResolvedDistricts);
 
--- City subject gates: TEST_ALL of the high-adjacency or presence requirement
--- and "has Future Civic" (added below). The scorer drops the unregistered civic
--- requirement and sees the district test alone; Real Modifier Analysis
--- (Extended Policy Cards' card values) fails it and leaves the signal out;
+-- A capital penalty stands only with its Palace, its marker and the marker
+-- signal that cancels it (a CAPITAL signal needs only the Palace);
+-- AGENTS.md "Holy Site pantheon signals"
+DELETE FROM RoseChoiceBiases
+WHERE GateType IN ('PALACE', 'CAPITAL', 'CAPITAL_MARKER')
+  AND NOT EXISTS (SELECT 1 FROM Buildings WHERE BuildingType = 'BUILDING_PALACE');
+DELETE FROM RoseChoiceBiases
+WHERE GateType = 'CAPITAL_MARKER'
+  AND (GateValue IS NULL
+    OR NOT EXISTS (SELECT 1 FROM Buildings WHERE BuildingType = RoseChoiceBiases.GateValue));
+DELETE FROM RoseChoiceBiases
+WHERE GateType = 'PALACE'
+  AND (NOT EXISTS (SELECT 1 FROM RoseChoiceBiases cancel
+                   WHERE cancel.SourceType = RoseChoiceBiases.SourceType
+                     AND cancel.GateType = 'CAPITAL_MARKER'
+                     AND cancel.Amount = -RoseChoiceBiases.Amount
+                     AND cancel.YieldType = RoseChoiceBiases.YieldType));
+
+-- City subject gates: TEST_ALL of the high-adjacency, presence or Palace
+-- requirement (the capital marker gate holds the Palace and the marker) and
+-- "has Future Civic" (added below). The scorer drops the unregistered civic
+-- requirement and sees the city tests alone; Real Modifier Analysis (Extended
+-- Policy Cards' card values) fails it and leaves the signal out;
 -- AGENTS.md "Adjacency cards", "Follower-belief yield signals",
--- "Card value shown by Extended Policy Cards"
+-- "Card value shown by Extended Policy Cards", "Holy Site pantheon signals"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType)
 SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'REQUIREMENTSET_TEST_ALL'
-FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE');
+FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE', 'CAPITAL_MARKER', 'PALACE', 'CAPITAL');
 
 INSERT INTO Requirements (RequirementId, RequirementType)
 SELECT 'ROSE_CHOICE_REQ_DISTRICT_' || gate.BiasId || '_' || gate.DistrictType,
@@ -158,8 +177,37 @@ SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId,
        'ROSE_CHOICE_REQ_DISTRICT_' || BiasId || '_' || DistrictType
 FROM RoseChoiceResolvedDistricts;
 
+-- The capital test of the Palace, capital and capital marker gates;
+-- AGENTS.md "Holy Site pantheon signals"
+INSERT INTO Requirements (RequirementId, RequirementType)
+SELECT 'ROSE_CHOICE_REQ_PALACE', 'REQUIREMENT_CITY_HAS_BUILDING'
+WHERE EXISTS (SELECT 1 FROM RoseChoiceBiases WHERE GateType IN ('PALACE', 'CAPITAL', 'CAPITAL_MARKER'));
+
+INSERT INTO RequirementArguments (RequirementId, Name, Value)
+SELECT 'ROSE_CHOICE_REQ_PALACE', 'BuildingType', 'BUILDING_PALACE'
+WHERE EXISTS (SELECT 1 FROM RoseChoiceBiases WHERE GateType IN ('PALACE', 'CAPITAL', 'CAPITAL_MARKER'));
+
+INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId)
+SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'ROSE_CHOICE_REQ_PALACE'
+FROM RoseChoiceBiases WHERE GateType IN ('PALACE', 'CAPITAL', 'CAPITAL_MARKER');
+
+-- The marker test of each capital marker gate: its own marker building
+-- (GateValue; defined in Rose_Belief_Signals.sql and placed by
+-- scripts/Rose_AI_Choices.lua); AGENTS.md "Holy Site pantheon signals"
+INSERT INTO Requirements (RequirementId, RequirementType)
+SELECT DISTINCT 'ROSE_CHOICE_REQ_HAS_' || GateValue, 'REQUIREMENT_CITY_HAS_BUILDING'
+FROM RoseChoiceBiases WHERE GateType = 'CAPITAL_MARKER';
+
+INSERT INTO RequirementArguments (RequirementId, Name, Value)
+SELECT DISTINCT 'ROSE_CHOICE_REQ_HAS_' || GateValue, 'BuildingType', GateValue
+FROM RoseChoiceBiases WHERE GateType = 'CAPITAL_MARKER';
+
+INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId)
+SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'ROSE_CHOICE_REQ_HAS_' || GateValue
+FROM RoseChoiceBiases WHERE GateType = 'CAPITAL_MARKER';
+
 -- Government owner eligibility (founder, non-founder, leader trait), kept
--- although the scorer skips owner requirements; AGENTS.md "Government signals unchanged"
+-- although the scorer skips owner requirements; AGENTS.md "Government signals"
 INSERT INTO Requirements (RequirementId, RequirementType, Inverse)
 SELECT 'ROSE_CHOICE_REQ_GATE_' || BiasId, 'REQUIREMENT_PLAYER_IS_RELIGION_FOUNDER',
        CASE WHEN GateType = 'FOUNDER' THEN 0 ELSE 1 END
@@ -202,7 +250,7 @@ FROM RoseChoiceBiases WHERE YieldType IS NOT NULL;
 
 -- The same contradiction as a subject set for the envoy signals, whose
 -- impossible gate sits on the subject (PLAYER_HAS_CIVIC is unregistered in the
--- scorer, so it still scores them); AGENTS.md "Government signals unchanged"
+-- scorer, so it still scores them); AGENTS.md "Government signals"
 INSERT INTO RequirementSets (RequirementSetId, RequirementSetType) VALUES
 ('ROSE_CHOICE_NEVER_ACTIVE', 'REQUIREMENTSET_TEST_ALL');
 INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId) VALUES
@@ -213,7 +261,7 @@ INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId) VALUES
 -- AGENTS.md "Card value shown by Extended Policy Cards"
 INSERT INTO RequirementSetRequirements (RequirementSetId, RequirementId)
 SELECT 'ROSE_CHOICE_CITY_GATE_' || BiasId, 'ROSE_CHOICE_HAS_FUTURE_CIVIC'
-FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE');
+FROM RoseChoiceBiases WHERE GateType IN ('ADJACENCY', 'HOLY_SITE', 'CAPITAL_MARKER', 'PALACE', 'CAPITAL');
 
 -- One modifier per signal with its arguments, attached to its policy,
 -- government or belief; AGENTS.md "Inactive choice registry"
@@ -222,7 +270,7 @@ SELECT BiasId,
        CASE WHEN YieldType IS NOT NULL THEN 'MODIFIER_PLAYER_CITIES_ADJUST_CITY_YIELD_CHANGE'
             ELSE 'MODIFIER_PLAYER_ADJUST_DUPLICATE_FIRST_INFLUENCE_TOKEN' END,
        'ROSE_CHOICE_OWNER_' || BiasId,
-       CASE WHEN GateType IN ('ADJACENCY', 'HOLY_SITE') THEN 'ROSE_CHOICE_CITY_GATE_' || BiasId
+       CASE WHEN GateType IN ('ADJACENCY', 'HOLY_SITE', 'CAPITAL_MARKER', 'PALACE', 'CAPITAL') THEN 'ROSE_CHOICE_CITY_GATE_' || BiasId
             ELSE 'ROSE_CHOICE_NEVER_ACTIVE' END
 FROM RoseChoiceBiases;
 

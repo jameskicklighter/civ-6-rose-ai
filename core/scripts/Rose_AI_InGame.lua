@@ -1,8 +1,9 @@
 -- ============================================================================
 -- Rose AI InGame UI bridge: military strength, net Gold income, envoys, Trader
 -- details and dead policy slots for the gameplay scripts (ExposedMembers.RoseAI),
--- the policy-modifier audit behind the dead slots, and the bridge relay that
--- sends the decision readings to every machine. These getters and GameEffects
+-- the policy-modifier audit behind the dead slots, the verbose era score and
+-- strategic resource lines and the bridge relay that sends the decision readings to every machine. These
+-- getters and GameEffects
 -- are unavailable in the gameplay context. Hooks: Events.TurnBegin,
 -- LocalPlayerTurnBegin, LoadScreenClose, the civic/government/policy events and
 -- GameCoreEventPublishComplete; no saved state. AGENTS.md "Rose_AI_InGame.lua /
@@ -413,6 +414,109 @@ local function ReportAdjacencySignals(iPlayerID, iTurn)
 		.. " player " .. iPlayerID .. ": " .. sText);
 end
 
+-- Era score (verbose only, print-only): a line per AI major whenever its era
+-- score changes. Game.GetEras():GetPlayerCurrentScore is a UI-context getter
+-- (Firaxis' EraProgressPanel.lua); the gameplay Eras table lacks it. It shows
+-- whether a granted building's historic moment gave era score. No saved state;
+-- a failed read prints one error line per session. AGENTS.md "Era score line".
+local tEraScore = {};
+local bEraScoreErrorPrinted = false;
+
+local function ReportEraScores()
+	local bOk, sError = pcall(function()
+		local iTurn = Game.GetCurrentGameTurn();
+		local pEras = Game.GetEras();
+		for _, pPlayer in ipairs(PlayerManager.GetAliveMajors()) do
+			if not pPlayer:IsHuman() then
+				local iPlayerID = pPlayer:GetID();
+				local iScore = pEras:GetPlayerCurrentScore(iPlayerID);
+				if iScore ~= nil and tEraScore[iPlayerID] ~= iScore then
+					tEraScore[iPlayerID] = iScore;
+					print("Rose_AI_InGame: Rose AI: Era score turn " .. iTurn
+						.. " player " .. iPlayerID .. " score " .. tostring(iScore));
+				end
+			end
+		end
+	end);
+	if not bOk and not bEraScoreErrorPrinted then
+		bEraScoreErrorPrinted = true;
+		print("Rose_AI_InGame: Rose AI ERROR: Era score read failed (" .. tostring(sError) .. ")");
+	end
+end
+
+-- Strategic resource line (verbose only): every RESOURCE_REPORT_TURNS turns, and
+-- on a turn an AI major's set of short resources changes, one line per alive AI
+-- major with each strategic resource it holds, gains or spends: stockpile/cap,
+-- net per turn and its parts as the top panel adds them, the turns the stockpile
+-- lasts at a negative net, and SHORT when it cannot cover the next turn's net
+-- (units then lose combat strength and cannot heal). AGENTS.md "Strategic
+-- resource line".
+local RESOURCE_REPORT_TURNS = 5;
+local tStrategicResources = nil;
+local tResourceShort = {}; -- player ID -> short resource names, as last printed
+local bResourceErrorPrinted = false;
+
+local function ReadStrategicResources(pPlayer)
+	local pResources = pPlayer:GetResources();
+	local tParts = {};
+	local tShort = {};
+	for _, sType in ipairs(tStrategicResources) do
+		local iStock = pResources:GetResourceAmount(sType);
+		local iCap = pResources:GetResourceStockpileCap(sType);
+		local iGain = pResources:GetResourceAccumulationPerTurn(sType);
+		local iImport = pResources:GetResourceImportPerTurn(sType);
+		local iBonus = pResources:GetBonusResourcePerTurn(sType);
+		local iUnits = pResources:GetUnitResourceDemandPerTurn(sType);
+		local iPower = pResources:GetPowerResourceDemandPerTurn(sType);
+		if iStock ~= 0 or iGain ~= 0 or iImport ~= 0 or iBonus ~= 0 or iUnits ~= 0 or iPower ~= 0 then
+			local sName = string.gsub(sType, "^RESOURCE_", "");
+			local iNet = iGain + iImport + iBonus - iUnits - iPower;
+			local sPart = sName .. " " .. iStock .. "/" .. iCap .. " net " .. iNet
+				.. " (gain " .. iGain .. " import " .. iImport .. " bonus " .. iBonus
+				.. " units " .. iUnits .. " power " .. iPower .. ")";
+			if iNet < 0 then
+				sPart = sPart .. " turns " .. math.floor(iStock / -iNet);
+				if iStock + iNet < 0 then
+					sPart = sPart .. " SHORT";
+					table.insert(tShort, sName);
+				end
+			end
+			table.insert(tParts, sPart);
+		end
+	end
+	if #tParts == 0 then return "none", ""; end
+	return table.concat(tParts, "; "), table.concat(tShort, ",");
+end
+
+local function ReportStrategicResources()
+	local bOk, sError = pcall(function()
+		if tStrategicResources == nil then
+			local tTypes = {};
+			for kRow in GameInfo.Resources() do
+				if kRow.ResourceClassType == "RESOURCECLASS_STRATEGIC" then table.insert(tTypes, kRow.ResourceType); end
+			end
+			tStrategicResources = tTypes;
+		end
+		local iTurn = Game.GetCurrentGameTurn();
+		local bInterval = iTurn % RESOURCE_REPORT_TURNS == 0;
+		for _, pPlayer in ipairs(PlayerManager.GetAliveMajors()) do
+			if not pPlayer:IsHuman() then
+				local iPlayerID = pPlayer:GetID();
+				local sLine, sShort = ReadStrategicResources(pPlayer);
+				if bInterval or sShort ~= (tResourceShort[iPlayerID] or "") then
+					tResourceShort[iPlayerID] = sShort;
+					print("Rose_AI_InGame: Rose AI: Strategic resources turn " .. iTurn
+						.. " player " .. iPlayerID .. ": " .. sLine);
+				end
+			end
+		end
+	end);
+	if not bOk and not bResourceErrorPrinted then
+		bResourceErrorPrinted = true;
+		print("Rose_AI_InGame: Rose AI ERROR: Strategic resource read failed (" .. tostring(sError) .. ")");
+	end
+end
+
 -- tOnly: set of player IDs to audit, or nil for every AI major.
 local function AuditPolicyModifiers(tOnly)
 	BuildAuditTables();
@@ -698,6 +802,10 @@ end
 Events.TurnBegin.Add(function()
 	tAuditDirty = {};
 	if ShouldAudit() then RunPolicyAudit(nil); end
+	if ROSE_VERBOSE_LOGS then
+		ReportEraScores();
+		ReportStrategicResources();
+	end
 end);
 
 -- These UI events carry the player ID first (Firaxis handlers filter it to the

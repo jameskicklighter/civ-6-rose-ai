@@ -31,7 +31,7 @@ AGENTS.md "### military/ (Rose_Operation_Roles.sql, Operations.xml, trees/)".
       <Where TeamName="Settle City Team" OperationName="Settle New City" />
       <Set MaxUnits="3" />
     </Update>
-    <!-- The Lua-seeded ship plus at most two nearby ships; AGENTS.md "Naval Superiority replacement". -->
+    <!-- The Lua squadron, at most three ships; AGENTS.md "Naval Superiority replacement". -->
     <Update>
       <Where TeamName="Naval Superiority Force" OperationName="Naval Superiority" />
       <Set MaxUnits="3" />
@@ -84,9 +84,12 @@ AGENTS.md "### military/ (Rose_Operation_Roles.sql, Operations.xml, trees/)".
     <Replace TeamName="Settle City Team" AiType="UNITTYPE_SIEGE_ALL" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Settle City Team" AiType="UNITTYPE_AIR_SIEGE" MinNumber="0" MaxNumber="0" />
 
-    <!-- A small combat-ships-only interception force; AGENTS.md "Naval Superiority replacement". -->
-    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_MELEE" MinNumber="1" MaxNumber="2" />
-    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_RANGED" MinNumber="0" MaxNumber="1" />
+    <!--
+    A small combat-ships-only interception force: the Lua squadron, melee or ranged ships;
+    AGENTS.md "Naval Superiority replacement", "Naval superiority squadrons and director escorts".
+    -->
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_MELEE" MinNumber="0" MaxNumber="2" />
+    <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_RANGED" MinNumber="0" MaxNumber="2" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_CIVILIAN_LEADER" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_LAND_COMBAT" MinNumber="0" MaxNumber="0" />
     <Replace TeamName="Naval Superiority Force" AiType="UNITTYPE_AIR" MinNumber="0" MaxNumber="0" />

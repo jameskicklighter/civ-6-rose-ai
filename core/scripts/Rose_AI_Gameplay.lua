@@ -2,10 +2,11 @@
 -- Rose AI: gameplay entry script. Registers the strategy condition callbacks,
 -- includes the modules (ImportFiles, shared through the one global RoseMod)
 -- and runs them from two hooks: PlayerTurnStarted (war and austerity latches,
--- civic research check, policy repair, civic grant) and PlayerTurnStartComplete
--- (nuclear strike, war director, verbose reports, naval superiority); the
--- Trader diagnostic runs at both. RoseBridgeRelay stores the host's bridge
--- readings. AGENTS.md "Rose_AI_Gameplay.lua".
+-- civic research check, policy repair, civic grant, pantheon marker, verbose
+-- pantheon watch) and PlayerTurnStartComplete (nuclear strike, war director,
+-- verbose reports, naval superiority); the Trader diagnostic runs at both.
+-- RoseBridgeRelay stores the host's bridge readings. AGENTS.md
+-- "Rose_AI_Gameplay.lua".
 -- ============================================================================
 
 print("Rose AI: Loading gameplay support script");
@@ -42,12 +43,18 @@ RegisterForbidCallback("RoseForbidStrategyGoldenClassical");
 RegisterForbidCallback("RoseForbidStrategyGoldenMedieval");
 RegisterForbidCallback("RoseForbidStrategyGoldenRenaissance");
 RegisterForbidCallback("RoseForbidStrategyReligiousFounded");
+RegisterForbidCallback("RoseForbidStrategyFaithNeutralClassical");
+RegisterForbidCallback("RoseForbidStrategyFaithNeutralMedieval");
+RegisterForbidCallback("RoseForbidStrategyLowReligionNeutral");
+RegisterForbidCallback("RoseForbidStrategyReligiousFaithAncient");
+RegisterForbidCallback("RoseForbidStrategyNonReligiousProphet");
 
 -- The one table the modules share; everything else stays local to its file.
 -- Rose_AI_Strategies fills tForbidStrategy once its checks have loaded.
 RoseMod = { ForbidStrategy = tForbidStrategy };
 include("Rose_AI_Core");
 include("Rose_AI_Civics");
+include("Rose_AI_Choices");
 include("Rose_AI_Strategies");
 include("Rose_AI_Naval");
 include("Rose_AI_Nuclear");
@@ -60,21 +67,27 @@ local StoreBridgeRelay = RoseMod.StoreBridgeRelay;
 local UpdateWarStrategyLatches = RoseMod.UpdateWarStrategyLatches;
 local UpdateAusterityLatch = RoseMod.UpdateAusterityLatch;
 local GrantCivicOrRepairPolicies = RoseMod.GrantCivicOrRepairPolicies;
+local UpdatePantheonMarker = RoseMod.UpdatePantheonMarker;
 local RunTraderDiagnostic = RoseMod.RunTraderDiagnostic;
 local TryNuclearStrike = RoseMod.TryNuclearStrike;
 local TryWarDirector = RoseMod.TryWarDirector;
 local UpdateCityStateOperations = RoseMod.UpdateCityStateOperations;
 local UpdateOperationProbe = RoseMod.UpdateOperationProbe;
+local UpdatePantheonWatch = RoseMod.UpdatePantheonWatch;
 local TryStartNavalSuperiority = RoseMod.TryStartNavalSuperiority;
 local UpdateNavalFollowUp = RoseMod.UpdateNavalSuperiorityFollowUp;
 
 -- Update latches, then grant at most one ready civic or repair dead policy
--- cards.
+-- cards, then place or remove the pantheon marker.
 function OnPlayerTurnStarted(iPlayerID)
 	Guard("War strategy latch update", UpdateWarStrategyLatches, iPlayerID);
 	Guard("Austerity latch update", UpdateAusterityLatch, iPlayerID);
 	Guard("Civic grant or policy repair", GrantCivicOrRepairPolicies, iPlayerID);
+	Guard("Pantheon marker", UpdatePantheonMarker, iPlayerID);
 	RunTraderDiagnostic(iPlayerID, "PlayerTurnStarted");
+	if ROSE_VERBOSE_LOGS then
+		Guard("Pantheon watch", UpdatePantheonWatch, iPlayerID);
+	end
 end
 
 -- Firaxis' Nubia scenario starts scripted military operations from this hook.

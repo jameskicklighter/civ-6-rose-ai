@@ -38,6 +38,19 @@ local NUCLEAR_DEVICES_PROPERTY = "ROSE_NUCLEAR_DEVICES";
 local NUCLEAR_DETONATIONS_PROPERTY = "ROSE_NUCLEAR_DETONATIONS";
 local NUCLEAR_RECENT_PROPERTY = "ROSE_NUCLEAR_RECENT";
 
+-- The engine refuses a WMD strike from a unit below this health percent
+-- (COMBAT_MIN_HEALTH_PERCENT_TO_AIR_PILLAGE, health 100 - damage * 100 / max
+-- hit points); AGENTS.md "WMD strike start checks".
+local function GetGlobalNumber(sName, iDefault)
+	if GlobalParameters ~= nil and tonumber(GlobalParameters[sName]) ~= nil then
+		return tonumber(GlobalParameters[sName]);
+	end
+	local kRow = GameInfo.GlobalParameters ~= nil and GameInfo.GlobalParameters[sName] or nil;
+	return kRow ~= nil and tonumber(kRow.Value) or iDefault;
+end
+local iMinStrikeHealth = GetGlobalNumber("COMBAT_MIN_HEALTH_PERCENT_TO_AIR_PILLAGE", 50);
+local iMaxHitPoints = GetGlobalNumber("COMBAT_MAX_HIT_POINTS", 100);
+
 local tWMDTypes = {};
 local iMaxBlastRadius = 0;
 if GameInfo.WMDs ~= nil then
@@ -191,28 +204,33 @@ local function MonitorNuclearStrike(pPlayer, iTurn, iDevices)
 	return kStrike;
 end
 
--- WMD-capable units; aircraft only while the AI holds NUCLEAR_MIN_AIRCRAFT
--- of them. A naval unit's range is iStrikeRange (the held device's ICBM
--- range), an aircraft's its Units.Range.
+-- WMD-capable units healthy enough to launch; aircraft only while the AI
+-- holds NUCLEAR_MIN_AIRCRAFT of them, damaged ones counted. A naval unit's
+-- range is iStrikeRange (the held device's ICBM range), an aircraft's its
+-- Units.Range.
 local function GetNuclearDeliveryUnits(pPlayer, iStrikeRange)
 	local tUnits = {};
-	local iAircraft = 0;
+	local iAircraft, iHealthy = 0, 0;
 	for _, pUnit in pPlayer:GetUnits():Members() do
 		local kDelivery = tWMDDeliveryUnits[pUnit:GetType()];
 		if kDelivery ~= nil then
 			if kDelivery.Air then iAircraft = iAircraft + 1; end
-			table.insert(tUnits, { Unit = pUnit, Air = kDelivery.Air,
+			local iDamage = pUnit.GetDamage ~= nil and (pUnit:GetDamage() or 0) or 0;
+			local bHealthy = iMaxHitPoints <= 0
+				or 100 - math.floor(iDamage * 100 / iMaxHitPoints) >= iMinStrikeHealth;
+			if bHealthy then iHealthy = iHealthy + 1; end
+			table.insert(tUnits, { Unit = pUnit, Air = kDelivery.Air, Healthy = bHealthy,
 				Range = kDelivery.Naval and iStrikeRange or kDelivery.Range,
-				Damage = pUnit.GetDamage ~= nil and (pUnit:GetDamage() or 0) or 0 });
+				Damage = iDamage });
 		end
 	end
 	local tUsable = {};
 	for _, kUnit in ipairs(tUnits) do
-		if not kUnit.Air or iAircraft >= NUCLEAR_MIN_AIRCRAFT then
+		if kUnit.Healthy and (not kUnit.Air or iAircraft >= NUCLEAR_MIN_AIRCRAFT) then
 			table.insert(tUsable, kUnit);
 		end
 	end
-	return tUsable, #tUnits, iAircraft;
+	return tUsable, #tUnits, iAircraft, iHealthy;
 end
 
 local function CountPlotsWithin(tPlots, iX, iY, iDistance, iSkipID)
@@ -240,10 +258,13 @@ local function FindNuclearTarget(pPlayer, tSince, iTurn, iRadius, iStrikeRange)
 		return nil, "no war with a major of " .. NUCLEAR_MIN_WAR_TURNS .. "+ turns";
 	end
 	table.sort(tEnemyIDs);
-	local tDelivery, iDeliveryUnits, iAircraft = GetNuclearDeliveryUnits(pPlayer, iStrikeRange);
+	local tDelivery, iDeliveryUnits, iAircraft, iHealthy = GetNuclearDeliveryUnits(pPlayer, iStrikeRange);
 	if #tDelivery == 0 then
 		if iDeliveryUnits == 0 then
 			return nil, "no delivery unit";
+		end
+		if iHealthy == 0 then
+			return nil, "every delivery unit (" .. iDeliveryUnits .. ") below " .. iMinStrikeHealth .. "% health";
 		end
 		return nil, "only " .. iAircraft .. " WMD aircraft (needs " .. NUCLEAR_MIN_AIRCRAFT .. ")";
 	end
@@ -285,8 +306,7 @@ local function FindNuclearTarget(pPlayer, tSince, iTurn, iRadius, iStrikeRange)
 			for _, pCity in pOwner:GetCities():Members() do
 				local iX, iY = pCity:GetX(), pCity:GetY();
 				-- Units in range that are themselves outside the blast: the least
-				-- damaged first (damage never rules one out), then the closest,
-				-- then unit order.
+				-- damaged first, then the closest, then unit order.
 				local tCandidates = {};
 				if pVisibility:IsRevealed(iX, iY) then
 					for iIndex, kDelivery in ipairs(tDelivery) do

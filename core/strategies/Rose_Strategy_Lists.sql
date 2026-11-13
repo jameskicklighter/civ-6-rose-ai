@@ -96,9 +96,8 @@ INSERT OR REPLACE INTO AiFavoredItems
 ('RoseWarAdvantageDiplomacy', 'DIPLOACTION_PROPOSE_PEACE_DEAL', 0, 0),
 ('RoseWarAdvantageDiplomacy', 'DIPLOACTION_MAKE_PEACE',         0, 0);
 
--- At War: no new city-state wars (diplomacy skips a disfavored action) and
--- every AI nuke-willing ("Will use nukes" passes on a favored action);
--- AGENTS.md "STRATEGY_ROSE_AT_WAR", 'Known engine behaviour: nuclear operations'
+-- At War: no new city-state wars (diplomacy skips a disfavored action);
+-- AGENTS.md "STRATEGY_ROSE_AT_WAR"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseAtWarDiplomacy');
 INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
@@ -107,8 +106,7 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 ('STRATEGY_ROSE_AT_WAR',            'RoseAtWarDiplomacy');
 INSERT OR REPLACE INTO AiFavoredItems
     (ListType, Item, Favored, Value) VALUES
-('RoseAtWarDiplomacy', 'DIPLOACTION_DECLARE_WAR_MINOR_CIV',      0,   0),
-('RoseAtWarDiplomacy', 'DIPLOACTION_USE_NUCLEAR_WEAPON',         1,   0);
+('RoseAtWarDiplomacy', 'DIPLOACTION_DECLARE_WAR_MINOR_CIV',      0,   0);
 
 -- At War: no planned (CITY_ASSAULT) slot during a major war, leaving the one
 -- wartime slot; a limit below zero blocks like zero, and running operations

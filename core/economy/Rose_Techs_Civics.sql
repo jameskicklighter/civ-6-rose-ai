@@ -5,16 +5,15 @@
 -- AGENTS.md "## Current Features", "### economy/Rose_Techs_Civics.sql".
 -- ============================================================================
 
--- All majors, all eras: Currency (earlier Commercial Hubs) and Engineering (the
--- first trainable wall-breaker for walled assaults); a tech favor is not cleared
--- when a strategy ends but is on reload, so it stays off strategies;
--- AGENTS.md "Currency tech prioritized", "Engineering prioritized"
+-- All majors, all eras: Engineering (the first trainable wall-breaker for
+-- walled assaults); a tech favor is not cleared when a strategy ends but is on
+-- reload, so it stays off a strategy that can end before the tech is owned;
+-- AGENTS.md "Engineering prioritized"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseMajorCivTechs');
 INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseMajorCivTechs', 'TRAIT_LEADER_MAJOR_CIV', 'Technologies');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
-('RoseMajorCivTechs', 'TECH_CURRENCY',    1),
 ('RoseMajorCivTechs', 'TECH_ENGINEERING', 1);
 
 -- All majors, all eras: Political Philosophy (tier 1 governments) and Feudalism

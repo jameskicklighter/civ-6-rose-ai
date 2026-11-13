@@ -19,7 +19,7 @@ Most changes are AI preference weights: they make an option more or less attract
 - Food and Production weighted up from the Ancient to the Renaissance era, with some early Culture and less early Science. Each era's weights apply only while the AI is in that era.
 - Higher priority for population, Traders (always), Great Merchants (Classical and Medieval), Great Engineers, and districts and Science from the Medieval to the Industrial era.
 - Favored districts: Government Plazas, Aqueducts, Diplomatic Quarters and Dams (always; no Dams for Egypt), 15 civilizations' unique districts (always), Commercial Hubs (Classical and Medieval), Industrial Zones (from the Medieval era), Campuses for science leaders and Theater Squares for cultural leaders from the Renaissance (also for any AI meeting the Science or Culture Victory conditions then), and Aerodromes for aggressive military leaders and AIs pursuing a military victory.
-- Technology and civic priorities: Currency, Engineering (the first siege units), Feudalism and Political Philosophy; the later government civics come from the civic grants below.
+- Technology and civic priorities: Engineering (the first siege units), Astrology for religious AIs, Feudalism and Political Philosophy; the later government civics come from the civic grants below.
 - Dedications: Monumentality for every AI in a Golden Age; otherwise Monumentality, Free Inquiry for science leaders until the Renaissance, and Monumentality or, once they have founded a religion, Exodus of the Evangelists for religious leaders. Pen, Brush and Voice is not favored.
 - Religious Victory is pursued only after founding a religion, except by religious leaders.
 - Improvements (and so Builders) valued more from the Medieval to the Industrial era.
@@ -36,7 +36,7 @@ Most changes are AI preference weights: they make an option more or less attract
 
 Rose adds strategies for wars against other major civilizations, plus an austerity mode:
 
-- **At War:** more Production, Gold and army, naval units and replacements; less demand for optional districts, improvements and wonders; enemy cities valued more as targets. While it lasts, the AI starts no new wars on city-states and no planned attacks (a Military Victory AI keeps one), and is willing to use nuclear weapons.
+- **At War:** more Production, Gold and army, naval units and replacements; less demand for optional districts, improvements and wonders; enemy cities valued more as targets. While it lasts, the AI starts no new wars on city-states and no planned attacks (a Military Victory AI keeps one).
 - **Military Recovery:** while the AI's military strength is below 70% of its combined major-civilization enemies (until it recovers to 85%), it rebuilds harder, cuts optional infrastructure further, adds City Defense capacity and gives up its planned attack slot.
 - **War Advantage:** while the AI is at least 125% as strong as its enemies (until it falls below 110%), it does not seek peace (it can still accept an offer) and gets a second wartime attack.
 - **Austerity:** when the AI is nearly out of Gold and losing Gold each turn, it favors Gold, Traders, Commercial Hubs and Harbors and trims part of its extra wartime unit demand until the treasury recovers. It never disbands units or cancels attacks.
@@ -68,14 +68,14 @@ While an AI has been at war with another major civilization for three turns, Ros
 
 The base game's nuclear operation could not order or keep a delivery unit, so the AI built devices and rarely used them. Rose switches that operation off and orders strikes from its script, one launch per order:
 
-- An AI holding a device and at war with a major civilization for five turns launches a Bomber, Jet Bomber or Nuclear Submarine at a revealed city of that enemy within range.
+- An AI holding a device and at war with a major civilization for five turns launches a Bomber, Jet Bomber or Nuclear Submarine at a revealed city of that enemy within range, using only units with at least half their health (the game refuses a launch below that).
 - Never at a city-state, never where the blast could reach its own units or cities, or the cities of anyone it is not at war with, and not at the same city twice within ten turns.
-- Aggressive military leaders and Gandhi research toward nuclear weapons earlier and are always willing to use them; other AIs are willing while At War is active. Gandhi's nuclear attitude is permanent instead of a random hidden agenda.
+- Aggressive military leaders and Gandhi research toward nuclear weapons earlier and are always willing to use them; every AI is willing from the Modern era on. Gandhi's nuclear attitude is permanent instead of a random hidden agenda.
 
 ### Leaders
 
 - Curated science, cultural, religious, aggressive-military and low-religion leader groups; leaders who should not spend an early district slot on religion avoid Ancient-era Holy Sites and Stonehenge, while religious leaders favor Holy Sites up to the Medieval era, early Great Prophets and Stonehenge (both Saladin versions have their own tuning).
-- Harbors for selected naval leaders, native coastal raids for original Harald, cavalry and Holy War for Basil II, and expansionist settling for Victoria, Philip II and Peter the Great, and more districts for Hammurabi, Nubia and Germany.
+- Harbors for selected naval leaders, native coastal raids for original Harald, cavalry and Holy War for Basil II, and expansionist settling for Victoria, Philip II and Peter the Great, more districts for Hammurabi, Nubia and Germany, and Theater Squares, Culture and Great Writer, Artist and Musician points for both Eleanors in every era.
 - Aggressive military leaders favor formal and surprise wars, value friendships less, and favor the Grand Master's Chapel (Faith purchases of land units).
 - Preserves and Mysticism for Bull Moose Roosevelt and John Curtin, Preserves for the Maori, Canals for Qin Shi Huang (Mandate of Heaven), Entertainment Complexes for Scotland.
 

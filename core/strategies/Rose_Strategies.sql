@@ -143,7 +143,12 @@ INSERT OR IGNORE INTO Types (Type, Kind) VALUES
 ('STRATEGY_ROSE_GOLDEN_CLASSICAL',       'KIND_VICTORY_STRATEGY'),
 ('STRATEGY_ROSE_GOLDEN_MEDIEVAL',        'KIND_VICTORY_STRATEGY'),
 ('STRATEGY_ROSE_GOLDEN_RENAISSANCE',     'KIND_VICTORY_STRATEGY'),
-('STRATEGY_ROSE_RELIGIOUS_FOUNDED',       'KIND_VICTORY_STRATEGY');
+('STRATEGY_ROSE_RELIGIOUS_FOUNDED',       'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_FAITH_NEUTRAL_CLASSICAL',  'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_FAITH_NEUTRAL_MEDIEVAL',   'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_LOW_RELIGION_NEUTRAL',    'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_RELIGIOUS_FAITH_ANCIENT', 'KIND_VICTORY_STRATEGY'),
+('STRATEGY_ROSE_NON_RELIGIOUS_PROPHET',  'KIND_VICTORY_STRATEGY');
 
 INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
 ('STRATEGY_ROSE_GOLDEN_CLASSICAL',       0),
@@ -155,7 +160,12 @@ INSERT OR IGNORE INTO Strategies (StrategyType, NumConditionsNeeded) VALUES
 ('STRATEGY_ROSE_SALADIN_HOLY_SITE',      0),
 ('STRATEGY_ROSE_AVOID_HOLY_SITES_EARLY', 0),
 ('STRATEGY_ROSE_SCIENCE_LEADER_LATE',    0),
-('STRATEGY_ROSE_CULTURE_LEADER_LATE',    0);
+('STRATEGY_ROSE_CULTURE_LEADER_LATE',    0),
+('STRATEGY_ROSE_FAITH_NEUTRAL_CLASSICAL',  0),
+('STRATEGY_ROSE_FAITH_NEUTRAL_MEDIEVAL',   0),
+('STRATEGY_ROSE_LOW_RELIGION_NEUTRAL',    0),
+('STRATEGY_ROSE_RELIGIOUS_FAITH_ANCIENT', 0),
+('STRATEGY_ROSE_NON_RELIGIOUS_PROPHET',  0);
 
 INSERT OR IGNORE INTO StrategyConditions
     (StrategyType, ConditionFunction, Disqualifier) VALUES
@@ -168,7 +178,12 @@ INSERT OR IGNORE INTO StrategyConditions
 ('STRATEGY_ROSE_GOLDEN_CLASSICAL',       'Is Not Major', 1),
 ('STRATEGY_ROSE_GOLDEN_MEDIEVAL',        'Is Not Major', 1),
 ('STRATEGY_ROSE_GOLDEN_RENAISSANCE',     'Is Not Major', 1),
-('STRATEGY_ROSE_RELIGIOUS_FOUNDED',       'Is Not Major', 1);
+('STRATEGY_ROSE_RELIGIOUS_FOUNDED',       'Is Not Major', 1),
+('STRATEGY_ROSE_FAITH_NEUTRAL_CLASSICAL',  'Is Not Major', 1),
+('STRATEGY_ROSE_FAITH_NEUTRAL_MEDIEVAL',   'Is Not Major', 1),
+('STRATEGY_ROSE_LOW_RELIGION_NEUTRAL',    'Is Not Major', 1),
+('STRATEGY_ROSE_RELIGIOUS_FAITH_ANCIENT', 'Is Not Major', 1),
+('STRATEGY_ROSE_NON_RELIGIOUS_PROPHET',  'Is Not Major', 1);
 
 INSERT OR IGNORE INTO StrategyConditions
     (StrategyType, ConditionFunction, StringValue, ThresholdValue, Forbidden) VALUES
@@ -181,7 +196,12 @@ INSERT OR IGNORE INTO StrategyConditions
 ('STRATEGY_ROSE_GOLDEN_CLASSICAL',       'Call Lua Function', 'RoseForbidStrategyGoldenClassical',     0, 1),
 ('STRATEGY_ROSE_GOLDEN_MEDIEVAL',        'Call Lua Function', 'RoseForbidStrategyGoldenMedieval',      0, 1),
 ('STRATEGY_ROSE_GOLDEN_RENAISSANCE',     'Call Lua Function', 'RoseForbidStrategyGoldenRenaissance',   0, 1),
-('STRATEGY_ROSE_RELIGIOUS_FOUNDED',       'Call Lua Function', 'RoseForbidStrategyReligiousFounded',    0, 1);
+('STRATEGY_ROSE_RELIGIOUS_FOUNDED',       'Call Lua Function', 'RoseForbidStrategyReligiousFounded',    0, 1),
+('STRATEGY_ROSE_FAITH_NEUTRAL_CLASSICAL',  'Call Lua Function', 'RoseForbidStrategyFaithNeutralClassical', 0, 1),
+('STRATEGY_ROSE_FAITH_NEUTRAL_MEDIEVAL',   'Call Lua Function', 'RoseForbidStrategyFaithNeutralMedieval',  0, 1),
+('STRATEGY_ROSE_LOW_RELIGION_NEUTRAL',    'Call Lua Function', 'RoseForbidStrategyLowReligionNeutral',    0, 1),
+('STRATEGY_ROSE_RELIGIOUS_FAITH_ANCIENT', 'Call Lua Function', 'RoseForbidStrategyReligiousFaithAncient', 0, 1),
+('STRATEGY_ROSE_NON_RELIGIOUS_PROPHET',  'Call Lua Function', 'RoseForbidStrategyNonReligiousProphet',   0, 1);
 
 -- Golden Age flag: the player property ROSE_GOLDEN_AGE, held while the base
 -- PLAYER_HAS_GOLDEN_AGE requirement is (Heroic Ages included), for the Golden

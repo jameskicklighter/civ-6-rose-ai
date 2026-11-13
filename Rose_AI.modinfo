@@ -9,6 +9,12 @@
     <CompatibleVersions>2.0</CompatibleVersions>
   </Properties>
 
+  <ActionCriteria>
+    <Criteria id="ROSE_AI_GOVERNOR_RULESETS">
+      <RuleSetInUse>RULESET_EXPANSION_1,RULESET_EXPANSION_2</RuleSetInUse>
+    </Criteria>
+  </ActionCriteria>
+
   <InGameActions>
 
     <UpdateDatabase id="ROSE_AI">
@@ -40,9 +46,18 @@
       <File Priority="1">core/economy/Rose_Yields.sql</File>
     </UpdateDatabase>
 
+    <!-- Governor tables exist only in the expansion rulesets; loads after ROSE_AI, whose registry it reuses. -->
+    <UpdateDatabase id="ROSE_AI_GOVERNORS" criteria="ROSE_AI_GOVERNOR_RULESETS">
+      <Properties>
+        <LoadOrder>601</LoadOrder>
+      </Properties>
+      <File Priority="1">core/choices/Rose_Governor_Signals.sql</File>
+    </UpdateDatabase>
+
     <ImportFiles id="ROSE_AI_MODULES">
       <File>core/scripts/Rose_AI_Core.lua</File>
       <File>core/scripts/Rose_AI_Civics.lua</File>
+      <File>core/scripts/Rose_AI_Choices.lua</File>
       <File>core/scripts/Rose_AI_Strategies.lua</File>
       <File>core/scripts/Rose_AI_Naval.lua</File>
       <File>core/scripts/Rose_AI_Nuclear.lua</File>
@@ -76,6 +91,7 @@
     <File>core/economy/Rose_Units.sql</File>
     <File>core/choices/Rose_Belief_Signals.sql</File>
     <File>core/choices/Rose_Policy_Signals.sql</File>
+    <File>core/choices/Rose_Governor_Signals.sql</File>
     <File>core/military/Rose_Operation_Roles.sql</File>
     <File>core/military/Operations.xml</File>
     <File>core/military/trees/Simple_Operation_Attack.xml</File>
@@ -89,6 +105,7 @@
     <File>core/scripts/Rose_AI_Gameplay.lua</File>
     <File>core/scripts/Rose_AI_Core.lua</File>
     <File>core/scripts/Rose_AI_Civics.lua</File>
+    <File>core/scripts/Rose_AI_Choices.lua</File>
     <File>core/scripts/Rose_AI_Strategies.lua</File>
     <File>core/scripts/Rose_AI_Naval.lua</File>
     <File>core/scripts/Rose_AI_Nuclear.lua</File>

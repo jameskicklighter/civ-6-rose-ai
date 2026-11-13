@@ -283,7 +283,7 @@ end
 -- Era windows: the base era strategies never end once adopted, so per-era
 -- lists sit on these instead. Each is on while the player's era lies in its
 -- range (no sLast: to the end of the game) and, for a leader window, the leader
--- has one of its traits and none of tExcludeTraits; a bGoldenAge window also
+-- has one of tTraits (any leader when it is nil) and none of tExcludeTraits; a bGoldenAge window also
 -- needs a Golden Age, a bFoundedReligion window a religion the player founded.
 -- There is one Golden window per dedication era, so each starts at most once
 -- and the engine's 20-turn restart hold never meets it.
@@ -294,6 +294,9 @@ end
 -- "Dedication preferences".
 -- ============================================================================
 local tSaladinTraits = { "TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH", "TRAIT_LEADER_SALADIN_ALT" };
+-- Mvemba's trait (no Holy Sites): kept out of the Faith neutral windows.
+local tConvertTraits = { "TRAIT_LEADER_RELIGIOUS_CONVERT" };
+local tReligiousOrConvertTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV", "TRAIT_LEADER_RELIGIOUS_CONVERT" };
 local tEraWindows = {
 	{ sCallback = "AncientEra",     sFirst = "ERA_ANCIENT",     sLast = "ERA_ANCIENT" },
 	{ sCallback = "ClassicalEra",   sFirst = "ERA_CLASSICAL",   sLast = "ERA_CLASSICAL" },
@@ -318,6 +321,16 @@ local tEraWindows = {
 	{ sCallback = "GoldenRenaissance", sFirst = "ERA_RENAISSANCE", sLast = "ERA_RENAISSANCE", bGoldenAge = true },
 	{ sCallback = "ReligiousFounded", sFirst = "ERA_ANCIENT",
 		tTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" }, bFoundedReligion = true },
+	{ sCallback = "FaithNeutralClassical", sFirst = "ERA_CLASSICAL", sLast = "ERA_CLASSICAL",
+		tExcludeTraits = tConvertTraits },
+	{ sCallback = "FaithNeutralMedieval", sFirst = "ERA_MEDIEVAL", sLast = "ERA_MEDIEVAL",
+		tExcludeTraits = tConvertTraits },
+	{ sCallback = "LowReligionNeutral", sFirst = "ERA_CLASSICAL", sLast = "ERA_MEDIEVAL",
+		tTraits = { "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE" } },
+	{ sCallback = "ReligiousFaithAncient", sFirst = "ERA_ANCIENT", sLast = "ERA_ANCIENT",
+		tTraits = { "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV" } },
+	{ sCallback = "NonReligiousProphet", sFirst = "ERA_CLASSICAL", sLast = "ERA_MEDIEVAL",
+		tExcludeTraits = tReligiousOrConvertTraits },
 };
 
 -- Golden (or Heroic) Age from ROSE_GOLDEN_AGE, the player property the Golden

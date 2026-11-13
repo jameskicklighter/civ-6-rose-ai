@@ -47,6 +47,72 @@ INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseAvoidHSEarlyDistricts',      'DISTRICT_HOLY_SITE', 0);
 
+-- Every leader but Mvemba (convert trait, no Holy Sites): Faith weight back to
+-- neutral in the Classical and Medieval eras, cancelling the base default and
+-- era Faith biases (Classical -5 in sum, Medieval -30); AGENTS.md
+-- "Faith neutral in the early eras"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseFaithNeutralClassicalYields'),
+('RoseFaithNeutralMedievalYields');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseFaithNeutralClassicalYields', 'Yields'),
+('RoseFaithNeutralMedievalYields',  'Yields');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_FAITH_NEUTRAL_CLASSICAL', 'RoseFaithNeutralClassicalYields'),
+('STRATEGY_ROSE_FAITH_NEUTRAL_MEDIEVAL',  'RoseFaithNeutralMedievalYields');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseFaithNeutralClassicalYields', 'YIELD_FAITH', 1, 5),
+('RoseFaithNeutralMedievalYields',  'YIELD_FAITH', 1, 30);
+
+-- Religious leaders (the Saladins too): the base Faith default -25 cancelled in
+-- the Ancient era; AGENTS.md "Faith neutral in the early eras"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseReligiousFaithAncientYields');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseReligiousFaithAncientYields', 'Yields');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_RELIGIOUS_FAITH_ANCIENT', 'RoseReligiousFaithAncientYields');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseReligiousFaithAncientYields', 'YIELD_FAITH', 1, 25);
+
+-- Low religious preference leaders: the base trait's Great Prophet -75 and
+-- Faith -50 cancelled in the Classical and Medieval eras; AGENTS.md
+-- "Faith neutral in the early eras"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseLowReligionNeutralPseudoYields'),
+('RoseLowReligionNeutralYields');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseLowReligionNeutralPseudoYields', 'PseudoYields'),
+('RoseLowReligionNeutralYields',       'Yields');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_LOW_RELIGION_NEUTRAL', 'RoseLowReligionNeutralPseudoYields'),
+('STRATEGY_ROSE_LOW_RELIGION_NEUTRAL', 'RoseLowReligionNeutralYields');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseLowReligionNeutralPseudoYields', 'PSEUDOYIELD_GPP_PROPHET', 1, 75),
+('RoseLowReligionNeutralYields',       'YIELD_FAITH',             1, 50);
+
+-- Non-religious leaders but Mvemba (low-religion leaders included): a small
+-- Great Prophet weight in the Classical and Medieval eras, so they fill the
+-- religion slots the religious leaders leave; AGENTS.md "Faith neutral in the early eras"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseNonReligiousProphetPseudoYields');
+INSERT OR IGNORE INTO AiLists (ListType, System) VALUES
+('RoseNonReligiousProphetPseudoYields', 'PseudoYields');
+INSERT OR IGNORE INTO Strategy_Priorities (StrategyType, ListType) VALUES
+('STRATEGY_ROSE_NON_RELIGIOUS_PROPHET', 'RoseNonReligiousProphetPseudoYields');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseNonReligiousProphetPseudoYields', 'PSEUDOYIELD_GPP_PROPHET', 1, 10);
+
+-- Religious leaders, always: Astrology favored, so the Holy Site is open early
+-- (a tech favor stays off strategies, and no longer matters once researched);
+-- AGENTS.md "Astrology for religious AIs"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseReligiousTechs');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseReligiousTechs', 'TRAIT_LEADER_RELIGIOUS_MAJOR_CIV', 'Technologies');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseReligiousTechs', 'TECH_ASTROLOGY', 1);
+
 -- Low religious preference: Stonehenge always disfavored (a Buildings list has no effect on a strategy); AGENTS.md "Stonehenge disfavored"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseLowRelBuildings');
@@ -83,6 +149,19 @@ INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
 ('RoseNavalBiasDistricts', 'TRAIT_LEADER_ROSE_NAVAL_BIAS', 'Districts');
 INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
 ('RoseNavalBiasDistricts', 'DISTRICT_HARBOR', 1);
+
+-- Naval-bias leaders and England (civilization trait, so every English
+-- leader): Celestial Navigation, the tech of the Harbor and the Royal Navy
+-- Dockyard, always favored; AGENTS.md "Celestial Navigation for naval AIs"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseNavalBiasTechs'),
+('RoseEnglandTechs');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseNavalBiasTechs', 'TRAIT_LEADER_ROSE_NAVAL_BIAS',           'Technologies'),
+('RoseEnglandTechs',   'TRAIT_CIVILIZATION_ROYAL_NAVY_DOCKYARD', 'Technologies');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored) VALUES
+('RoseNavalBiasTechs', 'TECH_CELESTIAL_NAVIGATION', 1),
+('RoseEnglandTechs',   'TECH_CELESTIAL_NAVIGATION', 1);
 
 -- Original Harald: the engine's native Coastal Raid tactic (no tree node can
 -- issue it); the alternate Harald lacks the ability; AGENTS.md "Original Harald raid support"
@@ -260,9 +339,21 @@ INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
 ('RoseNubiaPseudoYields',   'PSEUDOYIELD_DISTRICT', 1, 50),
 ('RoseGermanyPseudoYields', 'PSEUDOYIELD_DISTRICT', 1, 50);
 
--- Eleanor: the base Theater Square favor is removed, leaving Theater Squares to
--- the cultural lists; AGENTS.md "Eleanor Theater Square favor removed"
-DELETE FROM AiFavoredItems WHERE ListType = 'EleanorDistricts' AND Item = 'DISTRICT_THEATER';
+-- Eleanor (both personas, through their shared trait): Culture +50 and Great
+-- Writer, Artist and Musician points +200 in every era (a district's value
+-- counts its Great Person points by these weights), beside the base Theater
+-- Square favor (EleanorDistricts, kept); AGENTS.md "Eleanor Theater Square and Great People"
+INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
+('RoseEleanorYields'),
+('RoseEleanorPseudoYields');
+INSERT OR IGNORE INTO AiLists (ListType, LeaderType, System) VALUES
+('RoseEleanorYields',       'TRAIT_LEADER_ELEANOR_LOYALTY', 'Yields'),
+('RoseEleanorPseudoYields', 'TRAIT_LEADER_ELEANOR_LOYALTY', 'PseudoYields');
+INSERT OR IGNORE INTO AiFavoredItems (ListType, Item, Favored, Value) VALUES
+('RoseEleanorYields',       'YIELD_CULTURE',            1, 50),
+('RoseEleanorPseudoYields', 'PSEUDOYIELD_GPP_WRITER',   1, 200),
+('RoseEleanorPseudoYields', 'PSEUDOYIELD_GPP_ARTIST',   1, 200),
+('RoseEleanorPseudoYields', 'PSEUDOYIELD_GPP_MUSICIAN', 1, 200);
 
 -- Qin Shi Huang (Mandate of Heaven; his trait unlocks the Canal at Masonry):
 -- Canal always favored; AGENTS.md "Qin Shi Huang Canal favored"

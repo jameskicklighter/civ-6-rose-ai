@@ -3,13 +3,15 @@
 -- latches. Defines the five RoseActiveStrategy* globals and fills the
 -- RoseForbidStrategy* callbacks; latches are written only from
 -- PlayerTurnStarted, the era windows keep no state. State:
--- ROSE_MILITARY_RECOVERY_LATCH, ROSE_WAR_ADVANTAGE_LATCH, ROSE_AUSTERITY_LATCH,
+-- ROSE_MILITARY_RECOVERY_LATCH, ROSE_WAR_ADVANTAGE_LATCH,
+-- ROSE_WAR_ADVANTAGE_SINCE/_PRESS_TURN, ROSE_AUSTERITY_LATCH,
 -- ROSE_AUSTERITY_NEG_TURNS/_POS_TURNS/_TURN. AGENTS.md "Dynamic war-strategy
 -- conditions", "Austerity latch", "Era window strategies".
 -- ============================================================================
 
 local IsEligibleAIPlayer = RoseMod.IsEligibleAIPlayer;
 local GetMajorsAtWar = RoseMod.GetMajorsAtWar;
+local ReadOperationExists = RoseMod.ReadOperationExists;
 local Guard = RoseMod.Guard;
 local GetMilitaryStrength = RoseMod.GetMilitaryStrength;
 local GetNetGoldIncome = RoseMod.GetNetGoldIncome;
@@ -74,13 +76,25 @@ end
 -- a saved player property written only from PlayerTurnStarted; an invalid
 -- strength reading leaves it unchanged. The entry values match the SQL
 -- ThresholdValue columns. AGENTS.md "STRATEGY_ROSE_MILITARY_RECOVERY".
+-- War Advantage also needs an attack under way: it enters only while an
+-- operation of ours targets a major we are at war with (or did within the
+-- grace turns), holds through the first ADVANTAGE_MIN_TURNS of its first entry
+-- in a war, and after that only while such an operation runs, so an AI whose
+-- attack ended or was beaten off can make peace. AGENTS.md
+-- "STRATEGY_ROSE_WAR_ADVANTAGE".
 -- ============================================================================
 local RECOVERY_ENTER_PERCENT = 70;
 local RECOVERY_RELEASE_PERCENT = 85;
 local ADVANTAGE_ENTER_PERCENT = 125;
 local ADVANTAGE_RELEASE_PERCENT = 110;
+local ADVANTAGE_MIN_TURNS = 20;
+local ADVANTAGE_PRESS_GRACE = 5;
 local RECOVERY_LATCH = "ROSE_MILITARY_RECOVERY_LATCH";
 local ADVANTAGE_LATCH = "ROSE_WAR_ADVANTAGE_LATCH";
+-- First turn of War Advantage in the current wars (cleared at peace).
+local ADVANTAGE_SINCE = "ROSE_WAR_ADVANTAGE_SINCE";
+-- Last turn start an operation of ours targeted a major we are at war with.
+local ADVANTAGE_PRESS_TURN = "ROSE_WAR_ADVANTAGE_PRESS_TURN";
 
 local function SetLatch(pPlayer, sProperty, bActive)
 	local bWasActive = pPlayer:GetProperty(sProperty) == 1;
@@ -94,6 +108,79 @@ local function UpdateLatch(pPlayer, sProperty, bEnter, bHold)
 	SetLatch(pPlayer, sProperty, bEnter or (bWasActive and bHold));
 end
 
+local function ClearProperty(pPlayer, sProperty)
+	if pPlayer:GetProperty(sProperty) ~= nil then pPlayer:SetProperty(sProperty, nil); end
+end
+
+-- Whether we press an attack: an operation of ours targets a major we are at
+-- war with now (recorded as the press turn) or did within the grace turns. An
+-- unreadable answer counts as pressing, which keeps the strength-only rule.
+local function UpdateAdvantagePress(pPlayer, iTurn, iWars)
+	local bUnreadable = false;
+	for _, pOther in ipairs(GetMajorsAtWar(pPlayer)) do
+		local bHas = ReadOperationExists(pPlayer, pOther:GetID());
+		if bHas == true then
+			if pPlayer:GetProperty(ADVANTAGE_PRESS_TURN) ~= iTurn then
+				pPlayer:SetProperty(ADVANTAGE_PRESS_TURN, iTurn);
+			end
+			return true, "an operation of ours runs against a major we are at war with";
+		end
+		if bHas == nil then bUnreadable = true; end
+	end
+	if bUnreadable then return true, "our operations are unreadable"; end
+	local iLast = pPlayer:GetProperty(ADVANTAGE_PRESS_TURN);
+	if type(iLast) == "number" and iTurn - iLast <= ADVANTAGE_PRESS_GRACE then
+		return true, "our last operation against them ran at turn " .. iLast;
+	end
+	return false, "no operation of ours against the " .. iWars .. " majors we are at war with since turn "
+		.. tostring(iLast) .. " (grace " .. ADVANTAGE_PRESS_GRACE .. ")";
+end
+
+-- War Advantage: enters at ADVANTAGE_ENTER_PERCENT while pressing; holds at
+-- ADVANTAGE_RELEASE_PERCENT through ADVANTAGE_MIN_TURNS from its first entry
+-- in these wars, then only while pressing. Leaving the window or the attack
+-- needs no strength reading, so it also applies when the reading is invalid.
+local function UpdateAdvantageLatch(pPlayer, iTurn, iWars, iOurStrength, iEnemyStrength, bStrengthValid)
+	local bPressing, sPress = UpdateAdvantagePress(pPlayer, iTurn, iWars);
+	local bWasActive = pPlayer:GetProperty(ADVANTAGE_LATCH) == 1;
+	local iSince = pPlayer:GetProperty(ADVANTAGE_SINCE);
+	if bWasActive and type(iSince) ~= "number" then
+		-- Latched by a version that kept no first turn: its window is spent.
+		iSince = iTurn - ADVANTAGE_MIN_TURNS;
+		pPlayer:SetProperty(ADVANTAGE_SINCE, iSince);
+	end
+	local bInWindow = type(iSince) == "number" and iTurn - iSince < ADVANTAGE_MIN_TURNS;
+	local bActive, sWhy = bWasActive, nil;
+	if bWasActive and not bInWindow and not bPressing then
+		bActive, sWhy = false, "past its first " .. ADVANTAGE_MIN_TURNS .. " turns and " .. sPress;
+	elseif bStrengthValid then
+		local iOurScaled = iOurStrength * 100;
+		if bWasActive then
+			-- Opposing armies gone: no ratio, and nothing weakens us.
+			if iEnemyStrength > 0 and iOurScaled < iEnemyStrength * ADVANTAGE_RELEASE_PERCENT then
+				bActive, sWhy = false, "strength under " .. ADVANTAGE_RELEASE_PERCENT .. "%";
+			end
+		elseif iEnemyStrength > 0 and iOurScaled >= iEnemyStrength * ADVANTAGE_ENTER_PERCENT then
+			if bPressing then
+				bActive, sWhy = true, sPress;
+			end
+		end
+	end
+	if bActive == bWasActive then return; end
+	if bActive and type(iSince) ~= "number" then
+		iSince = iTurn;
+		pPlayer:SetProperty(ADVANTAGE_SINCE, iTurn);
+	end
+	SetLatch(pPlayer, ADVANTAGE_LATCH, bActive);
+	print("Rose AI: War Advantage latch " .. (bActive and "entered" or "released")
+		.. " player " .. pPlayer:GetID()
+		.. " turn " .. iTurn
+		.. " strength " .. tostring(iOurStrength) .. "/" .. tostring(iEnemyStrength)
+		.. " valid " .. tostring(bStrengthValid)
+		.. " first entry " .. tostring(iSince)
+		.. ": " .. tostring(sWhy));
+end
+
 local function UpdateWarStrategyLatches(iPlayerID)
 	local pPlayer = Players[iPlayerID];
 	if pPlayer == nil then return; end
@@ -101,6 +188,8 @@ local function UpdateWarStrategyLatches(iPlayerID)
 		-- Clear any latch left from a period when this slot was an eligible AI.
 		SetLatch(pPlayer, RECOVERY_LATCH, false);
 		SetLatch(pPlayer, ADVANTAGE_LATCH, false);
+		ClearProperty(pPlayer, ADVANTAGE_SINCE);
+		ClearProperty(pPlayer, ADVANTAGE_PRESS_TURN);
 		return;
 	end
 	local iWars, iOurStrength, iEnemyStrength, bStrengthValid =
@@ -108,12 +197,15 @@ local function UpdateWarStrategyLatches(iPlayerID)
 	if iWars == 0 then
 		SetLatch(pPlayer, RECOVERY_LATCH, false);
 		SetLatch(pPlayer, ADVANTAGE_LATCH, false);
+		ClearProperty(pPlayer, ADVANTAGE_SINCE);
+		ClearProperty(pPlayer, ADVANTAGE_PRESS_TURN);
 		return;
 	end
+	UpdateAdvantageLatch(pPlayer, Game.GetCurrentGameTurn(), iWars,
+		iOurStrength, iEnemyStrength, bStrengthValid);
 	if not bStrengthValid then return; end
 	if iEnemyStrength <= 0 then
-		-- Opposing armies are gone: not weaker. Advantage keeps its state
-		-- because a ratio cannot be computed.
+		-- Opposing armies are gone: not weaker.
 		SetLatch(pPlayer, RECOVERY_LATCH, false);
 		return;
 	end
@@ -121,9 +213,6 @@ local function UpdateWarStrategyLatches(iPlayerID)
 	UpdateLatch(pPlayer, RECOVERY_LATCH,
 		iOurScaled < iEnemyStrength * RECOVERY_ENTER_PERCENT,
 		iOurScaled < iEnemyStrength * RECOVERY_RELEASE_PERCENT);
-	UpdateLatch(pPlayer, ADVANTAGE_LATCH,
-		iOurScaled >= iEnemyStrength * ADVANTAGE_ENTER_PERCENT,
-		iOurScaled >= iEnemyStrength * ADVANTAGE_RELEASE_PERCENT);
 end
 
 local function IsLatched(iPlayerID, sProperty)

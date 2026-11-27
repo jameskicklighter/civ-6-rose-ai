@@ -47,7 +47,8 @@ INSERT OR IGNORE INTO StrategyConditions (StrategyType, ConditionFunction, Thres
 ('STRATEGY_ROSE_MODERN_ONWARD',      'Is Modern',      1);
 
 -- War strategies (major wars only): At War, Military Recovery (below 70% of
--- the combined enemy strength) and War Advantage (125% or more); AGENTS.md
+-- the combined enemy strength) and War Advantage (125% or more while an attack
+-- of ours runs); AGENTS.md
 -- "STRATEGY_ROSE_AT_WAR", "STRATEGY_ROSE_MILITARY_RECOVERY", "STRATEGY_ROSE_WAR_ADVANTAGE"
 INSERT OR IGNORE INTO Types (Type, Kind) VALUES
 ('STRATEGY_ROSE_AT_WAR',            'KIND_VICTORY_STRATEGY'),

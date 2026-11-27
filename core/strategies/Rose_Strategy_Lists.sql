@@ -16,8 +16,9 @@ INSERT OR REPLACE INTO AiFavoredItems
 ('RoseAtWarYields',       'YIELD_PRODUCTION',                    1,  10),
 ('RoseAtWarYields',       'YIELD_GOLD',                          1,  10);
 
--- At War: army demand up, optional infrastructure down, enemy cities valued
--- higher (a higher CITY_BASE also weakens the frontier-first defense terms);
+-- At War: army demand up, wonders down, enemy cities valued higher (a
+-- higher CITY_BASE also weakens the frontier-first defense terms); districts
+-- and improvements keep their peacetime weight;
 -- AGENTS.md "STRATEGY_ROSE_AT_WAR", "Army size: militaristic leaders and wars"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseAtWarPseudoYields');
@@ -31,8 +32,6 @@ INSERT OR REPLACE INTO AiFavoredItems
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_UNIT_NAVAL_COMBAT',       1,  15),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER',    1,  30),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',     1,  25),
-('RoseAtWarPseudoYields', 'PSEUDOYIELD_DISTRICT',                1, -25),
-('RoseAtWarPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',             1, -25),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_WONDER',                  1, -15),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_CITY_DEFENDING_UNITS',    1, -40),
 ('RoseAtWarPseudoYields', 'PSEUDOYIELD_CITY_BASE',               1,  75);
@@ -76,14 +75,15 @@ INSERT OR REPLACE INTO AiFavoredItems
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_UNIT_NAVAL_COMBAT',        1,  40),
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_NUMBER',     1,  10),
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_STANDING_ARMY_VALUE',      1,  20),
-('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_DISTRICT',                 1, -50),
-('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',              1, -50),
+('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_DISTRICT',                 1, -25),
+('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_IMPROVEMENT',              1, -25),
 ('RoseMilitaryRecoveryPseudoYields', 'PSEUDOYIELD_WONDER',                   1, -25);
 
 -- The lists below keep the order they always loaded in: the engine reads the
 -- lists of one system (Diplomatic actions, operation slots) in database order.
 
--- War Advantage: a clearly stronger AI does not propose or make peace;
+-- War Advantage: a clearly stronger AI pressing an attack does not propose or
+-- make peace;
 -- AGENTS.md "STRATEGY_ROSE_WAR_ADVANTAGE"
 INSERT OR IGNORE INTO AiListTypes (ListType) VALUES
 ('RoseWarAdvantageDiplomacy');

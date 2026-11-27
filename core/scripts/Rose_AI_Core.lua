@@ -547,7 +547,7 @@ local function ReadOperationExists(pPlayer, iEnemyID)
 	if not bOk then
 		if not bOperationReadWarned then
 			bOperationReadWarned = true;
-			print("Rose AI ERROR: HasOperationAgainst failed; nuclear targets, the war director and the city-state report ignore our operations: " .. tostring(bHas));
+			print("Rose AI ERROR: HasOperationAgainst failed; nuclear targets, the war director and the city-state report ignore our operations, and War Advantage counts them as pressing: " .. tostring(bHas));
 		end
 		return nil;
 	end
